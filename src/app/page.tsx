@@ -10,12 +10,7 @@ import { Wallet, LogOut, ShieldCheck, Percent } from "lucide-react";
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  let session;
-  try {
-    session = await auth();
-  } catch (e) {
-    console.error("Auth session fetch error:", e);
-  }
+  const session = await auth();
   
   let spentThisMonth = 0;
   let cashbackThisMonth = 0;
