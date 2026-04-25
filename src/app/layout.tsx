@@ -39,7 +39,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ru" className={`${geistSans.variable} ${geistMono.variable}`}>
-      <body style={{ paddingBottom: '80px' }}>
+      <body style={{ paddingBottom: 'calc(80px + env(safe-area-inset-bottom))' }}>
         {children}
         <BottomNavWrapper />
       </body>

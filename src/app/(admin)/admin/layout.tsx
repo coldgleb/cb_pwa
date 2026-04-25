@@ -73,7 +73,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
         </div>
       </div>
 
-      <main className={container({ maxWidth: "512px", px: "20px", pb: "40px" })}>
+      <main className={container({ maxWidth: "512px", px: "20px", pb: "calc(100px + env(safe-area-inset-bottom))" })}>
         {children}
       </main>
     </div>
