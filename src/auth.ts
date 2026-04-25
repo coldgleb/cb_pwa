@@ -68,17 +68,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (user) {
         token.id = user.id;
         token.role = user.role;
+        token.email = user.email;
       }
+      
+      if (process.env.ADMIN_EMAIL && token.email?.toLowerCase() === process.env.ADMIN_EMAIL.toLowerCase()) {
+        token.role = "admin";
+      }
+      
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.id as string;
         session.user.role = token.role as string;
-        
-        if (process.env.ADMIN_EMAIL && session.user.email === process.env.ADMIN_EMAIL) {
-          session.user.role = "admin";
-        }
+        session.user.email = token.email as string;
       }
       return session;
     },
