@@ -3,6 +3,8 @@ import { css } from "../../../styled-system/css";
 import { stack, container, flex } from "../../../styled-system/patterns";
 import { Wallet, UserPlus } from "lucide-react";
 
+export const dynamic = "force-dynamic";
+
 export default function RegisterPage() {
   return (
     <div className={css({ minH: "100vh", bg: "#f4f4f4" })}>
