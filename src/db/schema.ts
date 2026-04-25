@@ -70,6 +70,7 @@ export const bankCards = sqliteTable("bank_cards", {
   bankId: integer("bank_id").references(() => banks.id).notNull(),
   name: text("name").notNull(),
   roundingType: text("rounding_type").default("no_rounding").notNull(),
+  defaultCashbackLimit: real("default_cashback_limit"),
 });
 
 // New table for historical settings
@@ -85,6 +86,7 @@ export const userCards = sqliteTable("user_cards", {
   userId: text("user_id").references(() => users.id).notNull(),
   bankCardId: integer("bank_card_id").references(() => bankCards.id).notNull(),
   lastFourDigits: text("last_four_digits"),
+  cashbackLimit: real("cashback_limit"),
 });
 
 export const mccCodes = sqliteTable("mcc_codes", {

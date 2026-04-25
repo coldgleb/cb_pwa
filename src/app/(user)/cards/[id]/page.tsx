@@ -2,11 +2,12 @@ import { db } from "@/db";
 import { banks, bankCards, userCards, bankCategories, userCashbackRules } from "@/db/schema";
 import { auth } from "@/auth";
 import MonthlyRulesForm from "@/components/MonthlyRulesForm";
+import { updateUserCard } from "@/lib/actions/user-cards";
 import { css } from "../../../../../styled-system/css";
 import { stack, flex } from "../../../../../styled-system/patterns";
 import { eq, desc, and } from "drizzle-orm";
 import { redirect, notFound } from "next/navigation";
-import { ArrowLeft, Calendar } from "lucide-react";
+import { ArrowLeft, Calendar, CreditCard, Save } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -31,12 +32,13 @@ export default async function CardDetailsPage({
   const startDate = `${yearMonth}-01`;
 
   // Verify the card belongs to the user
-  const cardData = await db.select({
+  const [card] = await db.select({
     id: userCards.id,
     name: bankCards.name,
     bankName: banks.name,
     bankCardId: userCards.bankCardId,
     lastFour: userCards.lastFourDigits,
+    cashbackLimit: userCards.cashbackLimit,
   })
   .from(userCards)
   .where(and(eq(userCards.id, userCardId), eq(userCards.userId, session.user.id!)))
@@ -44,7 +46,7 @@ export default async function CardDetailsPage({
   .leftJoin(banks, eq(bankCards.bankId, banks.id))
   .limit(1);
 
-  if (cardData.length === 0) notFound();
+  if (!card) notFound();
 
   const allCategories = await db.select().from(bankCategories);
 
@@ -73,14 +75,53 @@ export default async function CardDetailsPage({
           </a>
           <h1 className={css({ fontSize: "24px", fontWeight: "800", color: "#000" })}>Настройка карты</h1>
           <p className={css({ fontSize: "14px", color: "secondaryText", fontWeight: "600" })}>
-            {cardData[0].bankName} — {cardData[0].name} {cardData[0].lastFour ? `• ${cardData[0].lastFour}` : ''}
+            {card.bankName} — {card.name} {card.lastFour ? `• ${card.lastFour}` : ''}
           </p>
         </header>
 
         <div className={stack({ gap: "40px" })}>
+          {/* Общие настройки */}
+          <section className="sber-card">
+            <div className={flex({ align: "center", gap: "10px", mb: "24px" })}>
+              <div className={css({ p: "6px", bg: "#64748b", borderRadius: "8px", color: "white" })}>
+                <CreditCard size={18} />
+              </div>
+              <h2 className={css({ fontSize: "17px", fontWeight: "700", color: "#000" })}>Настройки карты</h2>
+            </div>
+
+            <form action={updateUserCard.bind(null, userCardId)} className={stack({ gap: "20px" })}>
+              <div className={flex({ gap: "12px", wrap: "wrap" })}>
+                <div className={stack({ gap: "6px", flex: 1, minW: "140px" })}>
+                  <label className="sber-label">ПОСЛЕДНИЕ 4 ЦИФРЫ</label>
+                  <input
+                    name="lastFourDigits"
+                    type="text"
+                    maxLength={4}
+                    defaultValue={card.lastFour || ""}
+                    placeholder="0000"
+                    className="sber-input"
+                  />
+                </div>
+                <div className={stack({ gap: "6px", flex: 1, minW: "140px" })}>
+                  <label className="sber-label">ЛИМИТ КЕШБЭКА (₽)</label>
+                  <input
+                    name="cashbackLimit"
+                    type="number"
+                    defaultValue={card.cashbackLimit || ""}
+                    placeholder="Например, 5000"
+                    className="sber-input"
+                  />
+                </div>
+              </div>
+              <button type="submit" className="sber-button" style={{ backgroundColor: "#64748b" }}>
+                <Save size={18} /> Сохранить настройки
+              </button>
+            </form>
+          </section>
+
           <MonthlyRulesForm 
             key={yearMonth}
-            userCards={cardData} 
+            userCards={[{ id: card.id, name: card.name, bankName: card.bankName, bankCardId: card.bankCardId }]} 
             allCategories={allCategories} 
             initialMonth={yearMonth}
             activeRules={activeRules.map(r => ({ categoryId: r.bankCategoryId!, percentage: r.percentage }))}

@@ -152,6 +152,16 @@ export default async function EditBankCardPage({ params }: { params: Promise<{ i
               ))}
             </select>
           </div>
+          <div className={stack({ gap: "6px" })}>
+            <label className="sber-label">ЛИМИТ КЕШБЭКА В МЕСЯЦ (ПО УМОЛЧАНИЮ)</label>
+            <input
+              name="defaultCashbackLimit"
+              type="number"
+              defaultValue={card.defaultCashbackLimit || ""}
+              placeholder="Например, 5000"
+              className="sber-input"
+            />
+          </div>
           <button type="submit" className="sber-button">
             Обновить тип карты
           </button>

@@ -13,6 +13,7 @@ export async function createBankCard(formData: FormData) {
   const name = formData.get("name") as string;
   const bankId = parseInt(formData.get("bankId") as string);
   const roundingType = formData.get("roundingType") as string || "no_rounding";
+  const defaultCashbackLimit = parseFloat(formData.get("defaultCashbackLimit") as string) || null;
 
   if (!name || isNaN(bankId)) throw new Error("Invalid data");
 
@@ -20,6 +21,7 @@ export async function createBankCard(formData: FormData) {
     name,
     bankId,
     roundingType,
+    defaultCashbackLimit,
   }).returning();
 
   if (newCard) {
@@ -51,11 +53,12 @@ export async function updateBankCard(id: number, formData: FormData) {
   const name = formData.get("name") as string;
   const bankId = parseInt(formData.get("bankId") as string);
   const roundingType = formData.get("roundingType") as string || "no_rounding";
+  const defaultCashbackLimit = parseFloat(formData.get("defaultCashbackLimit") as string) || null;
 
   if (!name || isNaN(bankId)) throw new Error("Invalid data");
 
   await db.update(bankCards)
-    .set({ name, bankId, roundingType })
+    .set({ name, bankId, roundingType, defaultCashbackLimit })
     .where(eq(bankCards.id, id));
 
   // Trigger recalculation for all users using this card type

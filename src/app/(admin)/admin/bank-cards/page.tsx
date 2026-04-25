@@ -56,6 +56,15 @@ export default async function AdminBankCardsPage() {
               className="sber-input"
             />
           </div>
+          <div className={stack({ gap: "6px" })}>
+            <label className="sber-label">ЛИМИТ КЕШБЭКА В МЕСЯЦ (ПО УМОЛЧАНИЮ)</label>
+            <input
+              name="defaultCashbackLimit"
+              type="number"
+              placeholder="Например, 5000"
+              className="sber-input"
+            />
+          </div>
           <button type="submit" className="sber-button">
             Сохранить тип карты
           </button>
