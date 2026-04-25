@@ -1,13 +1,12 @@
 import { db } from "@/db";
 import { banks, bankCards, userCards } from "@/db/schema";
 import { auth } from "@/auth";
-import { addUserCard } from "@/lib/actions/user-cards";
 import { css } from "../../../../styled-system/css";
-import { stack, container, flex } from "../../../../styled-system/patterns";
+import { stack, flex } from "../../../../styled-system/patterns";
 import { eq, asc } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { ArrowLeft, Plus, ChevronRight, Landmark } from "lucide-react";
-import SearchableSelect from "@/components/SearchableSelect";
+import AddUserCardForm from "@/components/AddUserCardForm";
 import { getIconUrl } from "@/lib/utils/icons";
 
 export const dynamic = "force-dynamic";
@@ -16,11 +15,12 @@ export default async function UserCardsPage() {
   const session = await auth();
   if (!session) redirect("/");
 
+  const allBanks = await db.select().from(banks).orderBy(asc(banks.name));
   const availableCardTypes = await db.select({
     id: bankCards.id,
+    bankId: bankCards.bankId,
     name: bankCards.name,
-    bankName: banks.name,
-  }).from(bankCards).leftJoin(banks, eq(bankCards.bankId, banks.id)).orderBy(asc(banks.name));
+  }).from(bankCards).orderBy(asc(bankCards.name));
 
   const myCards = await db.select({
     id: userCards.id,
@@ -34,11 +34,6 @@ export default async function UserCardsPage() {
   .where(eq(userCards.userId, session.user.id!))
   .leftJoin(bankCards, eq(userCards.bankCardId, bankCards.id))
   .leftJoin(banks, eq(bankCards.bankId, banks.id));
-
-  const cardTypeOptions = availableCardTypes.map(card => ({
-    value: card.id.toString(),
-    label: `${card.bankName} — ${card.name}`
-  }));
 
   return (
     <div className={css({ minH: "100vh", bg: "#f4f4f4" })}>
@@ -60,24 +55,7 @@ export default async function UserCardsPage() {
               <h2 className={css({ fontSize: "17px", fontWeight: "700", color: "#000" })}>Добавить карту</h2>
             </div>
             
-            <form action={addUserCard} className={stack({ gap: "20px" })}>
-              <div className={stack({ gap: "6px" })}>
-                <label className="sber-label">ТИП КАРТЫ</label>
-                <SearchableSelect 
-                  name="bankCardId" 
-                  options={cardTypeOptions}
-                  required
-                  placeholder="Выберите из списка..."
-                />
-              </div>
-              <div className={stack({ gap: "6px" })}>
-                <label className="sber-label">ПОСЛЕДНИЕ 4 ЦИФРЫ</label>
-                <input name="lastFourDigits" type="text" maxLength={4} placeholder="0000" className="sber-input" />
-              </div>
-              <button className="sber-button">
-                Добавить в кошелек
-              </button>
-            </form>
+            <AddUserCardForm banks={allBanks} cardTypes={availableCardTypes} />
           </section>
 
           {/* Список карт */}

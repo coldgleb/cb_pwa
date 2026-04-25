@@ -19,6 +19,7 @@ interface SearchableSelectProps {
   placeholder?: string;
   required?: boolean;
   allowCustom?: boolean;
+  disabled?: boolean;
 }
 
 export default function SearchableSelect({
@@ -30,6 +31,7 @@ export default function SearchableSelect({
   placeholder = "Выберите вариант...",
   required = false,
   allowCustom = false,
+  disabled = false,
 }: SearchableSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchValue, setSearchValue] = useState("");
@@ -81,8 +83,9 @@ export default function SearchableSelect({
       {/* Trigger / Input */}
       <div 
         role="button"
-        tabIndex={0}
+        tabIndex={disabled ? -1 : 0}
         onClick={(e) => {
+          if (disabled) return;
           e.preventDefault();
           e.stopPropagation();
           setIsOpen(!isOpen);
@@ -92,27 +95,28 @@ export default function SearchableSelect({
           gap: "10px", 
           px: "14px", 
           py: "12px", 
-          bg: "white", 
+          bg: disabled ? "#f1f5f9" : "white", 
           border: "1px solid", 
           borderColor: isOpen ? "sberGreen" : "#e2e8f0", 
           borderRadius: "14px", 
-          cursor: "pointer",
+          cursor: disabled ? "not-allowed" : "pointer",
           transition: "all 0.2s",
           WebkitTapHighlightColor: "transparent",
-          _active: { bg: "#f8fafc" },
-          w: "full"
+          _active: { bg: disabled ? "#f1f5f9" : "#f8fafc" },
+          w: "full",
+          opacity: disabled ? 0.7 : 1
         })}
       >
         <div className={css({ flex: 1, overflow: "hidden", minW: 0 })}>
           {currentSelection ? (
-            <p className={css({ fontSize: "14px", fontWeight: "600", color: "#000", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" })}>
+            <p className={css({ fontSize: "14px", fontWeight: "600", color: disabled ? "#64748b" : "#000", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" })}>
               {currentSelection.label}
             </p>
           ) : (
             <p className={css({ fontSize: "14px", color: "#94a3b8", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" })}>{placeholder}</p>
           )}
         </div>
-        <ChevronDown size={18} className={css({ color: "#64748b", transform: isOpen ? "rotate(180deg)" : "none", transition: "transform 0.2s" })} />
+        {!disabled && <ChevronDown size={18} className={css({ color: "#64748b", transform: isOpen ? "rotate(180deg)" : "none", transition: "transform 0.2s" })} />}
       </div>
 
       {/* Dropdown Panel */}
