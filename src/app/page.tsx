@@ -7,6 +7,8 @@ import { stack, flex } from "../../styled-system/patterns";
 import { eq, sql, and, gte } from "drizzle-orm";
 import { Wallet, LogOut, ShieldCheck, Percent } from "lucide-react";
 
+export const dynamic = "force-dynamic";
+
 export default async function Home() {
   let session;
   try {

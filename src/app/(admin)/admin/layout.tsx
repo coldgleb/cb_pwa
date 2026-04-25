@@ -5,6 +5,8 @@ import { css } from "../../../../styled-system/css";
 import { flex, container, stack } from "../../../../styled-system/patterns";
 import { Landmark, CreditCard, Hash, LayoutDashboard, Store } from "lucide-react";
 
+export const dynamic = "force-dynamic";
+
 export default async function AdminLayout({ children }: { children: ReactNode }) {
   const session = await auth();
 

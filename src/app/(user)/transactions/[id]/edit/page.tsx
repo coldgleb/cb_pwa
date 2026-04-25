@@ -8,6 +8,8 @@ import { redirect, notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import TransactionForm from "@/components/TransactionForm";
 
+export const dynamic = "force-dynamic";
+
 export default async function EditTransactionPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session) redirect("/");

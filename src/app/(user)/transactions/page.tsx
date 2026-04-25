@@ -11,6 +11,8 @@ import { Trash2, Edit2 } from "lucide-react";
 import SearchableSelect from "@/components/SearchableSelect";
 import { getIconUrl } from "@/lib/utils/icons";
 
+export const dynamic = "force-dynamic";
+
 export default async function TransactionsPage({ 
   searchParams 
 }: { 
