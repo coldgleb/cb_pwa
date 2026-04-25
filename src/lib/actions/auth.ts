@@ -16,6 +16,12 @@ export async function registerUser(formData: FormData) {
     throw new Error("Missing email or password");
   }
 
+  // Check if user exists first to provide a clear error
+  const [existingUser] = await db.select().from(users).where(eq(users.email, email)).limit(1);
+  if (existingUser) {
+    throw new Error("Пользователь с таким Email уже зарегистрирован");
+  }
+
   const hashedPassword = await bcrypt.hash(password, 10);
 
   try {
@@ -25,12 +31,18 @@ export async function registerUser(formData: FormData) {
       name,
     });
   } catch (error) {
-    console.error("Registration error:", error);
-    throw new Error("User already exists or database error");
+    console.error("Critical Registration Error:", error);
+    if (error instanceof Error) {
+      // Re-throw with more context to see in UI
+      throw new Error(`Ошибка базы данных: ${error.message}`);
+    }
+    throw new Error("Произошла неизвестная ошибка при регистрации");
   }
 
   redirect("/");
 }
+
+import { eq } from "drizzle-orm";
 
 export async function loginUser(formData: FormData) {
   try {
