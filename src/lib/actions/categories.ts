@@ -266,11 +266,8 @@ export async function addBankCardExclusion(bankCardId: number, mccCode: string) 
 
   if (!mccCode || mccCode.length !== 4) throw new Error("Invalid MCC code");
 
-  const [card] = await db.select({ bankId: bankCards.bankId }).from(bankCards).where(eq(bankCards.id, bankCardId)).limit(1);
-  if (!card) throw new Error("Bank card not found");
-
   await db.insert(bankExclusions).values({
-    bankId: card.bankId,
+    bankCardId,
     mccCode,
   }).onConflictDoNothing();
 
@@ -282,12 +279,9 @@ export async function removeBankCardExclusion(bankCardId: number, mccCode: strin
   const session = await auth();
   if (session?.user?.role !== "admin") throw new Error("Unauthorized");
 
-  const [card] = await db.select({ bankId: bankCards.bankId }).from(bankCards).where(eq(bankCards.id, bankCardId)).limit(1);
-  if (!card) throw new Error("Bank card not found");
-
   await db.delete(bankExclusions).where(
     and(
-      eq(bankExclusions.bankId, card.bankId),
+      eq(bankExclusions.bankCardId, bankCardId),
       eq(bankExclusions.mccCode, mccCode)
     )
   );
