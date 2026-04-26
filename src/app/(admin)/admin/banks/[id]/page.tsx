@@ -5,7 +5,7 @@ import { css } from "../../../../../../styled-system/css";
 import { stack, flex } from "../../../../../../styled-system/patterns";
 import { eq } from "drizzle-orm";
 import { notFound, redirect } from "next/navigation";
-import { ArrowLeft, Save } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 
 export default async function EditBankPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -28,37 +28,40 @@ export default async function EditBankPage({ params }: { params: Promise<{ id: s
         <h1 className={css({ fontSize: "22px", fontWeight: "800", color: "#000" })}>Редактировать банк</h1>
       </header>
 
-      <section className="sber-card">
-        <form action={async (formData) => {
-          "use server";
-          await updateBankWithId(formData);
-          redirect("/admin/banks");
-        }} className={stack({ gap: "24px" })}>
-          <div className={stack({ gap: "6px" })}>
-            <label className="sber-label">НАЗВАНИЕ БАНКА</label>
-            <input
-              name="name"
-              type="text"
-              defaultValue={bank.name}
-              required
-              className="sber-input"
-            />
-          </div>
-          <div className={stack({ gap: "6px" })}>
-            <label className="sber-label">URL ЛОГОТИПА</label>
-            <input
-              name="logo"
-              type="text"
-              defaultValue={bank.logo || ""}
-              placeholder="https://..."
-              className="sber-input"
-            />
-          </div>
-          <button type="submit" className="sber-button">
-            Обновить данные
-          </button>
-        </form>
-      </section>
+      <div className={stack({ gap: "24px" })}>
+        <section className="sber-card">
+          <h2 className="sber-label" style={{ marginBottom: "20px" }}>ОСНОВНАЯ ИНФОРМАЦИЯ</h2>
+          <form action={async (formData) => {
+            "use server";
+            await updateBankWithId(formData);
+            redirect("/admin/banks");
+          }} className={stack({ gap: "24px" })}>
+            <div className={stack({ gap: "6px" })}>
+              <label className="sber-label">НАЗВАНИЕ БАНКА</label>
+              <input
+                name="name"
+                type="text"
+                defaultValue={bank.name}
+                required
+                className="sber-input"
+              />
+            </div>
+            <div className={stack({ gap: "6px" })}>
+              <label className="sber-label">URL ЛОГОТИПА</label>
+              <input
+                name="logo"
+                type="text"
+                defaultValue={bank.logo || ""}
+                placeholder="https://..."
+                className="sber-input"
+              />
+            </div>
+            <button type="submit" className="sber-button">
+              Обновить данные
+            </button>
+          </form>
+        </section>
+      </div>
     </div>
   );
 }

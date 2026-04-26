@@ -5,7 +5,7 @@ import { css } from "../../../../styled-system/css";
 import { stack, container, flex } from "../../../../styled-system/patterns";
 import { eq, desc, and, gte, lte, inArray, asc } from "drizzle-orm";
 import { redirect } from "next/navigation";
-import { ArrowLeft, ShoppingCart, Utensils, Car, Coffee, Smartphone, Globe, Gift, HelpCircle, Filter, X, Store } from "lucide-react";
+import { ArrowLeft, ShoppingCart, Utensils, Car, Coffee, Smartphone, Globe, Gift, HelpCircle, Filter, X, Store, PlusCircle } from "lucide-react";
 import { deleteTransaction } from "@/lib/actions/transactions";
 import { Trash2, Edit2 } from "lucide-react";
 import SearchableSelect from "@/components/SearchableSelect";
@@ -156,6 +156,10 @@ export default async function TransactionsPage({
           </form>
         </section>
 
+        <a href="/transactions/new" className="sber-button" style={{ marginBottom: "24px", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", textDecoration: "none" }}>
+          <PlusCircle size={20} /> Новая покупка
+        </a>
+
         <div className={stack({ gap: "12px" })}>
           {history.length === 0 ? (
             <div className={css({ py: "80px", textAlign: "center", color: "secondaryText", bg: "white", borderRadius: "24px", border: "1px dashed", borderColor: "#e2e8f0" })}>
@@ -204,8 +208,13 @@ export default async function TransactionsPage({
                         </p>
                       )}
                       {totalCashback > 0 && (
-                        <div className={css({ px: "8px", py: "2px", bg: "#f0fdf4", color: "sberGreen", borderRadius: "8px", fontSize: "12px", fontWeight: "900" })}>
-                          +{totalCashback.toFixed(2)}
+                        <div className={flex({ align: "center", gap: "4px" })}>
+                          <span className={css({ fontSize: "10px", fontWeight: "800", color: "#94a3b8" })}>
+                            {((item.cashback || 0) / (item.paidAmount || item.amount) * 100).toFixed(0)}%
+                          </span>
+                          <div className={css({ px: "8px", py: "2px", bg: "#f0fdf4", color: "sberGreen", borderRadius: "8px", fontSize: "12px", fontWeight: "900" })}>
+                            +{totalCashback.toFixed(2)}
+                          </div>
                         </div>
                       )}
                     </div>

@@ -1,11 +1,26 @@
 "use server";
 
 import { db } from "@/db";
-import { merchants } from "@/db/schema";
+import { merchants, bankCategoryMerchant, userCashbackRules, transactions } from "@/db/schema";
 import { auth } from "@/auth";
 import { revalidatePath } from "next/cache";
-
+import { eq, inArray } from "drizzle-orm";
 import { findMccForMerchant } from "@/lib/utils/merchant-finder";
+import { recalculateTransactionsForMerchantNames } from "./cashback-engine";
+
+export async function getMerchantMccSuggestions(name: string) {
+  const [existing] = await db.select().from(merchants).where(eq(merchants.name, name)).limit(1);
+  if (existing) {
+    return {
+      mainMcc: existing.mainMcc,
+      additionalMccs: existing.additionalMccs
+    };
+  }
+
+  // Try to find MCCs externally
+  const found = await findMccForMerchant(name);
+  return found || { mainMcc: "0000", additionalMccs: "0000" };
+}
 
 export async function ensureMerchantExists(name: string) {
   const [existing] = await db.select().from(merchants).where(eq(merchants.name, name)).limit(1);
@@ -36,18 +51,12 @@ export async function createMerchant(formData: FormData) {
   const website = formData.get("website") as string;
   const logo = formData.get("logo") as string;
 
-  // Extract the first 4-digit number as the main MCC (handles strings like "5411 - Supermarket")
   const mainMcc = mainMccRaw?.match(/^\d{4}/)?.[0];
 
   if (!name || !mainMcc) throw new Error("Name and Main MCC are required");
 
-  // Parse additional MCCs: find all 4-digit numbers
   const codes = [...new Set(additionalMccsText.match(/\b\d{4}\b/g) || [])];
-  
-  // Ensure '0000' is always present in additional MCCs
-  if (!codes.includes("0000")) {
-    codes.push("0000");
-  }
+  if (!codes.includes("0000")) codes.push("0000");
 
   await db.insert(merchants).values({
     name,
@@ -59,8 +68,6 @@ export async function createMerchant(formData: FormData) {
 
   revalidatePath("/admin/merchants");
 }
-
-import { eq } from "drizzle-orm";
 
 export async function updateMerchant(id: number, formData: FormData) {
   const session = await auth();
@@ -76,13 +83,10 @@ export async function updateMerchant(id: number, formData: FormData) {
 
   if (!name || !mainMcc) throw new Error("Name and Main MCC are required");
 
-  // Parse additional MCCs: find all 4-digit numbers
+  const [oldMerchant] = await db.select({ name: merchants.name }).from(merchants).where(eq(merchants.id, id)).limit(1);
+
   const codes = [...new Set(additionalMccsText.match(/\b\d{4}\b/g) || [])];
-  
-  // Ensure '0000' is always present in additional MCCs
-  if (!codes.includes("0000")) {
-    codes.push("0000");
-  }
+  if (!codes.includes("0000")) codes.push("0000");
 
   await db.update(merchants)
     .set({
@@ -94,6 +98,11 @@ export async function updateMerchant(id: number, formData: FormData) {
     })
     .where(eq(merchants.id, id));
 
+  const names = [name];
+  if (oldMerchant) names.push(oldMerchant.name);
+
+  await recalculateTransactionsForMerchantNames(names);
+
   revalidatePath("/admin/merchants");
 }
 
@@ -101,8 +110,27 @@ export async function deleteMerchant(id: number) {
   const session = await auth();
   if (session?.user?.role !== "admin") throw new Error("Unauthorized");
 
-  await db.delete(merchants).where(eq(merchants.id, id));
+  try {
+    const [merchant] = await db.select({ name: merchants.name }).from(merchants).where(eq(merchants.id, id)).limit(1);
+    if (!merchant) return;
 
-  revalidatePath("/admin/merchants");
+    // 1. Delete associated category links
+    await db.delete(bankCategoryMerchant).where(eq(bankCategoryMerchant.merchantId, id));
+
+    // 2. Clear merchantId in user cashback rules
+    await db.update(userCashbackRules)
+      .set({ merchantId: null })
+      .where(eq(userCashbackRules.merchantId, id));
+
+    // 3. Delete the merchant itself
+    await db.delete(merchants).where(eq(merchants.id, id));
+
+    // 4. Targeted recalculation for transactions with this name
+    await recalculateTransactionsForMerchantNames([merchant.name]);
+
+    revalidatePath("/admin/merchants");
+  } catch (error) {
+    console.error("Failed to delete merchant:", error);
+    throw new Error("Failed to delete merchant.");
+  }
 }
-

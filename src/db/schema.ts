@@ -104,6 +104,7 @@ export const bankCategories = sqliteTable("bank_categories", {
   roundingType: text("rounding_type").default("inherit").notNull(),
   startDate: text("start_date").default("2000-01-01").notNull(),
   endDate: text("end_date"),
+  cashbackLimit: real("cashback_limit"),
 });
 
 export const bankCategoryMcc = sqliteTable("bank_category_mcc", {
@@ -133,7 +134,7 @@ export const merchants = sqliteTable("merchants", {
 
 export const bankExclusions = sqliteTable("bank_exclusions", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  bankId: integer("bank_id").references(() => banks.id).notNull(),
+  bankCardId: integer("bank_card_id").references(() => bankCards.id).notNull(),
   mccCode: text("mcc_code").references(() => mccCodes.code).notNull(),
 });
 
@@ -146,6 +147,7 @@ export const userCashbackRules = sqliteTable("user_cashback_rules", {
   tiers: text("tiers").default("[]").notNull(),
   startDate: text("start_date").notNull(),
   endDate: text("end_date").notNull(),
+  cashbackLimit: real("cashback_limit"),
 });
 
 export const transactions = sqliteTable("transactions", {

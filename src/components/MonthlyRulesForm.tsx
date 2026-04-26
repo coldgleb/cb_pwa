@@ -21,11 +21,13 @@ interface Category {
   defaultPercentage: number;
   startDate: string;
   endDate: string | null;
+  cashbackLimit: number | null;
 }
 
 interface ActiveRule {
   categoryId: number;
   percentage: number;
+  cashbackLimit?: number | null;
 }
 
 interface MonthlyRulesFormProps {
@@ -46,6 +48,7 @@ export default function MonthlyRulesForm({
   
   const [selectedMonth, setSelectedMonth] = useState(initialMonth);
   const [isCopying, setIsCopying] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   const selectedCard = userCards[0]; // In this context we always have at least one card
   
@@ -85,7 +88,7 @@ export default function MonthlyRulesForm({
   const [activeCats, setActiveCats] = useState<Set<number>>(initialActiveSet);
 
   const toggleCat = (id: number, name: string) => {
-    if (name === "Без кешбэка") return; // Cannot toggle this
+    if (name === "Без кешбэка" || isSaving || isCopying) return; // Cannot toggle this
     const newSet = new Set(activeCats);
     if (newSet.has(id)) newSet.delete(id);
     else newSet.add(id);
@@ -93,12 +96,13 @@ export default function MonthlyRulesForm({
   };
 
   const handleMonthChange = (newMonth: string) => {
+    if (isSaving || isCopying) return;
     setSelectedMonth(newMonth);
     router.push(`${pathname}?month=${newMonth}`);
   };
 
   const handleCopy = async () => {
-    if (!selectedCard || !selectedMonth) return;
+    if (!selectedCard || !selectedMonth || isSaving || isCopying) return;
     setIsCopying(true);
     try {
       await copyRulesFromPreviousMonth(selectedCard.id, selectedMonth);
@@ -109,8 +113,32 @@ export default function MonthlyRulesForm({
     }
   };
 
+  const isPending = isSaving || isCopying;
+
   return (
-    <section className="sber-card">
+    <section className="sber-card" style={{ position: "relative" }}>
+      {isPending && (
+        <div className={css({
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          bg: "rgba(255, 255, 255, 0.7)",
+          zIndex: 10,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          borderRadius: "24px",
+          backdropFilter: "blur(2px)"
+        })}>
+          <div className={stack({ align: "center", gap: "12px" })}>
+            <Loader2 className={css({ animation: "spin 1s linear infinite", color: "sberGreen" })} size={32} />
+            <p className={css({ fontWeight: "700", color: "sberGreen", fontSize: "14px" })}>Пересчитываем кешбэк...</p>
+          </div>
+        </div>
+      )}
+
       <div className={flex({ align: "center", gap: "10px", mb: "24px" })}>
         <div className={css({ p: "6px", bg: "#f59e0b", borderRadius: "8px", color: "white" })}>
           <Star size={18} />
@@ -118,7 +146,14 @@ export default function MonthlyRulesForm({
         <h2 className={css({ fontSize: "17px", fontWeight: "700", color: "#000" })}>Настройка на месяц</h2>
       </div>
 
-      <form action={saveMonthlyRules} className={stack({ gap: "24px" })}>
+      <form action={async (formData) => {
+        setIsSaving(true);
+        try {
+          await saveMonthlyRules(formData);
+        } finally {
+          setIsSaving(false);
+        }
+      }} className={stack({ gap: "24px" })}>
         <div className={flex({ gap: "12px" })}>
           <div className={stack({ gap: "6px", flex: 1 })}>
             <label className="sber-label">КАРТА</label>
@@ -136,6 +171,7 @@ export default function MonthlyRulesForm({
               name="month" 
               required 
               value={selectedMonth}
+              disabled={isPending}
               onChange={(e) => handleMonthChange(e.target.value)}
               className="sber-input"
               style={{ fontSize: "14px" }}
@@ -149,7 +185,7 @@ export default function MonthlyRulesForm({
             <button 
               type="button" 
               onClick={handleCopy}
-              disabled={isCopying}
+              disabled={isPending}
               className={flex({ align: "center", gap: "6px", color: "sberGreen", fontSize: "12px", fontWeight: "700", cursor: "pointer", _disabled: { opacity: 0.5 } })}
             >
               {isCopying ? <Loader2 size={14} className={css({ animation: "spin 1s linear infinite" })} /> : <Copy size={14} />}
@@ -165,31 +201,51 @@ export default function MonthlyRulesForm({
 
               return (
                 <div key={cat.id} className={flex({ justify: "space-between", align: "center", p: "12px", bg: isActive ? (isNoCashback ? "#f8fafc" : "#f0fdf4") : "#f8fafc", borderRadius: "14px", border: "1px solid", borderColor: isActive && !isNoCashback ? "sberGreen" : "transparent", transition: "all 0.2s" })}>
-                  <label className={flex({ align: "center", gap: "12px", cursor: isNoCashback ? "default" : "pointer", flex: 1 })}>
+                  <label className={flex({ align: "center", gap: "12px", cursor: isNoCashback || isPending ? "default" : "pointer", flex: 1 })}>
                     <input 
                       type="checkbox" 
                       checked={isActive}
-                      disabled={isNoCashback}
+                      disabled={isNoCashback || isPending}
                       onChange={() => toggleCat(cat.id, cat.name)}
-                      className={css({ w: "20px", h: "20px", accentColor: "#21a038", cursor: isNoCashback ? "default" : "pointer", opacity: isNoCashback ? 0.5 : 1 })}
+                      className={css({ w: "20px", h: "20px", accentColor: "#21a038", cursor: isNoCashback || isPending ? "default" : "pointer", opacity: isNoCashback || isPending ? 0.5 : 1 })}
                     />
-                    <span className={css({ fontSize: "15px", fontWeight: isActive ? "700" : "500", color: isNoCashback ? "secondaryText" : "#000" })}>
-                      {cat.name}
-                    </span>
+                    <div className={stack({ gap: "2px" })}>
+                      <span className={css({ fontSize: "15px", fontWeight: isActive ? "700" : "500", color: isNoCashback ? "secondaryText" : "#000" })}>
+                        {cat.name}
+                      </span>
+                    </div>
                   </label>
-                  <div className={flex({ align: "center", gap: "8px", opacity: isActive ? 1 : 0.4, transition: "opacity 0.2s" })}>
-                    {isNoCashback && isActive && (
-                      <input type="hidden" name={`cat_${cat.id}`} value="0" />
+                  
+                  <div className={flex({ align: "center", gap: "12px" })}>
+                    {/* Limit Field */}
+                    {!isNoCashback && isActive && (
+                      <div className={flex({ align: "center", gap: "4px" })}>
+                        <span className={css({ fontSize: "9px", fontWeight: "800", color: "secondaryText" })}>ЛИМИТ</span>
+                        <input 
+                          name={`limit_${cat.id}`}
+                          type="number"
+                          disabled={isPending}
+                          defaultValue={savedRule?.cashbackLimit ?? cat.cashbackLimit ?? ""}
+                          placeholder="0"
+                          className={css({ w: "60px", p: "6px", borderRadius: "8px", border: "1px solid #e2e8f0", textAlign: "right", fontSize: "13px", fontWeight: "700", bg: "white", _disabled: { bg: "#f1f5f9" } })}
+                        />
+                      </div>
                     )}
-                    <input 
-                      name={isNoCashback ? undefined : `cat_${cat.id}`} 
-                      type="number" 
-                      step="0.25" 
-                      defaultValue={savedRule ? savedRule.percentage : cat.defaultPercentage}
-                      disabled={!isActive || isNoCashback}
-                      className={css({ w: "70px", p: "8px", borderRadius: "10px", border: "1px solid #e2e8f0", textAlign: "right", fontWeight: "800", fontSize: "15px", bg: isActive && !isNoCashback ? "white" : "#f1f5f9", outline: "none", color: "#000" })}
-                    />
-                    <span className={css({ fontSize: "14px", fontWeight: "800", color: isActive && !isNoCashback ? "sberGreen" : "secondaryText" })}>%</span>
+
+                    <div className={flex({ align: "center", gap: "6px", opacity: isActive ? 1 : 0.4, transition: "opacity 0.2s" })}>
+                      {isNoCashback && isActive && (
+                        <input type="hidden" name={`cat_${cat.id}`} value="0" />
+                      )}
+                      <input 
+                        name={isNoCashback ? undefined : `cat_${cat.id}`} 
+                        type="number" 
+                        step="0.25" 
+                        defaultValue={savedRule ? savedRule.percentage : cat.defaultPercentage}
+                        disabled={!isActive || isNoCashback || isPending}
+                        className={css({ w: "60px", p: "8px", borderRadius: "10px", border: "1px solid #e2e8f0", textAlign: "right", fontWeight: "800", fontSize: "15px", bg: isActive && !isNoCashback && !isPending ? "white" : "#f1f5f9", outline: "none", color: "#000" })}
+                      />
+                      <span className={css({ fontSize: "14px", fontWeight: "800", color: isActive && !isNoCashback ? "sberGreen" : "secondaryText" })}>%</span>
+                    </div>
                   </div>
                 </div>
               );
@@ -202,8 +258,9 @@ export default function MonthlyRulesForm({
           </div>
         </div>
 
-        <button type="submit" disabled={activeCats.size === 0} className="sber-button" style={{ opacity: activeCats.size === 0 ? 0.5 : 1 }}>
-          <Save size={18} /> Сохранить {activeCats.size > 0 && `(${activeCats.size})`}
+        <button type="submit" disabled={activeCats.size === 0 || isPending} className="sber-button" style={{ opacity: activeCats.size === 0 || isPending ? 0.5 : 1 }}>
+          {isSaving ? <Loader2 size={18} className={css({ animation: "spin 1s linear infinite" })} /> : <Save size={18} />}
+          {isSaving ? "Сохраняем..." : `Сохранить ${activeCats.size > 0 ? `(${activeCats.size})` : ""}`}
         </button>
       </form>
     </section>

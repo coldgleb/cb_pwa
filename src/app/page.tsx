@@ -1,5 +1,5 @@
 import { db } from "@/db";
-import { userCards, userCashbackRules, transactions } from "@/db/schema";
+import { userCards, userCashbackRules, transactions, banks, bankCards } from "@/db/schema";
 import { auth, signOut } from "@/auth";
 import { loginUser } from "@/lib/actions/auth";
 import { css } from "../../styled-system/css";
@@ -15,6 +15,7 @@ export default async function Home() {
   let spentThisMonth = 0;
   let cashbackThisMonth = 0;
   let avgPercentage = 0;
+  let bankStats: { bankName: string; bankLogo: string | null; spent: number; cashback: number; percentage: number }[] = [];
 
   if (session?.user?.id) {
     try {
@@ -23,9 +24,9 @@ export default async function Home() {
       
       const stats = await db
         .select({ 
-          totalSpent: sql<number>`sum(amount)`,
-          totalCalculated: sql<number>`sum(calculated_cashback)`,
-          totalManual: sql<number>`sum(manual_cashback_adjustment)`
+          totalSpent: sql<number>`sum(${transactions.amount})`,
+          totalCalculated: sql<number>`sum(${transactions.calculatedCashback})`,
+          totalManual: sql<number>`sum(${transactions.manualCashbackAdjustment})`
         })
         .from(transactions)
         .where(
@@ -40,6 +41,40 @@ export default async function Home() {
       const manual = Number(stats[0]?.totalManual) || 0;
       cashbackThisMonth = calculated + manual;
       avgPercentage = spentThisMonth > 0 ? (cashbackThisMonth / spentThisMonth) * 100 : 0;
+
+      // Bank-wise breakdown
+      const rawBankStats = await db
+        .select({
+          bankName: banks.name,
+          bankLogo: banks.logo,
+          spent: sql<number>`sum(${transactions.amount})`,
+          calculated: sql<number>`sum(${transactions.calculatedCashback})`,
+          manual: sql<number>`sum(${transactions.manualCashbackAdjustment})`
+        })
+        .from(transactions)
+        .innerJoin(userCards, eq(transactions.userCardId, userCards.id))
+        .innerJoin(bankCards, eq(userCards.bankCardId, bankCards.id))
+        .innerJoin(banks, eq(bankCards.bankId, banks.id))
+        .where(
+          and(
+            eq(transactions.userId, session.user.id),
+            gte(transactions.transactionDate, firstDayOfMonth)
+          )
+        )
+        .groupBy(banks.id, banks.name, banks.logo);
+
+      bankStats = rawBankStats.map(b => {
+        const totalCb = (Number(b.calculated) || 0) + (Number(b.manual) || 0);
+        const totalSpent = Number(b.spent) || 0;
+        return {
+          bankName: b.bankName,
+          bankLogo: b.bankLogo,
+          spent: totalSpent,
+          cashback: totalCb,
+          percentage: totalSpent > 0 ? (totalCb / totalSpent) * 100 : 0
+        };
+      }).sort((a, b) => b.percentage - a.percentage);
+
     } catch (e) {
       console.error("Dashboard query error:", e);
     }
@@ -109,6 +144,43 @@ export default async function Home() {
                   </div>
                 </div>
               </div>
+
+              {bankStats.length > 0 && (
+                <section className={stack({ gap: "16px", mt: "8px" })}>
+                  <h2 className={css({ fontSize: "18px", fontWeight: "800", color: "#000", px: "4px" })}>По банкам</h2>
+                  <div className={stack({ gap: "12px" })}>
+                    {bankStats.map((bank, idx) => (
+                      <div key={idx} className="sber-card" style={{ padding: "16px" }}>
+                        <div className={flex({ justify: "space-between", align: "center" })}>
+                          <div className={flex({ align: "center", gap: "12px" })}>
+                            {bank.bankLogo ? (
+                              <img src={bank.bankLogo} alt={bank.bankName} className={css({ w: "32px", h: "32px", borderRadius: "8px", objectFit: "contain" })} />
+                            ) : (
+                              <div className={css({ w: "32px", h: "32px", bg: "#f1f5f9", borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "14px" })}>🏦</div>
+                            )}
+                            <div className={stack({ gap: "0" })}>
+                              <p className={css({ fontSize: "15px", fontWeight: "700", color: "#000" })}>{bank.bankName}</p>
+                              <p className={css({ fontSize: "12px", color: "secondaryText", fontWeight: "600" })}>
+                                {bank.spent.toLocaleString('ru-RU')} ₽ потрачено
+                              </p>
+                            </div>
+                          </div>
+                          <div className={stack({ align: "flex-end", gap: "0" })}>
+                            <p className={css({ fontSize: "16px", fontWeight: "800", color: "sberGreen" })}>
+                              +{bank.cashback.toLocaleString('ru-RU')} ₽
+                            </p>
+                            <div className={flex({ align: "center", gap: "4px" })}>
+                              <p className={css({ fontSize: "12px", fontWeight: "700", px: "6px", py: "2px", bg: "#f0fdf4", color: "sberGreen", borderRadius: "6px" })}>
+                                {bank.percentage.toFixed(1)}%
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
 
               <section className={css({ mt: "16px", p: "20px", bg: "#f8fafc", borderRadius: "24px", border: "1px solid", borderColor: "#f1f5f9" })}>
                 <p className={css({ fontSize: "13px", color: "#64748b", lineHeight: "1.5", textAlign: "center" })}>

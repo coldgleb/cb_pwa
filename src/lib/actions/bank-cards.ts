@@ -1,12 +1,14 @@
 "use server";
 
 import { db } from "@/db";
-import { bankCards, bankCategories } from "@/db/schema";
+import { bankCards, bankCardSettings, bankCategories } from "@/db/schema";
 import { auth } from "@/auth";
 import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
+import { recalculateTransactionsForBankCard } from "./transactions";
 
 export async function createBankCard(formData: FormData) {
+
   const session = await auth();
   if (session?.user?.role !== "admin") throw new Error("Unauthorized");
 
@@ -43,8 +45,6 @@ export async function createBankCard(formData: FormData) {
 
   revalidatePath("/admin/bank-cards");
 }
-
-import { recalculateTransactionsForBankCard } from "./transactions";
 
 export async function updateBankCard(id: number, formData: FormData) {
   const session = await auth();

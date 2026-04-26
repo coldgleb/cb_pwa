@@ -1,11 +1,12 @@
 "use server";
 
 import { db } from "@/db";
-import { userCashbackRules, bankCategories } from "@/db/schema";
+import { userCashbackRules, bankCategories, userCards } from "@/db/schema";
 import { auth } from "@/auth";
 import { revalidatePath } from "next/cache";
 
 import { and, eq, lte, gte, inArray } from "drizzle-orm";
+import { recalculateTransactionsForUserCard, bulkRecalculateTransactions } from "./cashback-engine";
 
 export async function saveMonthlyRules(formData: FormData) {
   const session = await auth();
@@ -21,18 +22,34 @@ export async function saveMonthlyRules(formData: FormData) {
   const lastDay = new Date(year, month, 0).getDate();
   const endDate = `${yearMonth}-${String(lastDay).padStart(2, "0")}`;
 
+  // 1. Fetch old rules for comparison
+  const oldRules = await db
+    .select()
+    .from(userCashbackRules)
+    .where(
+        and(
+            eq(userCashbackRules.userCardId, userCardId),
+            eq(userCashbackRules.startDate, startDate),
+            eq(userCashbackRules.endDate, endDate)
+        )
+    );
+
   const entries = Array.from(formData.entries());
-  const categoryPercentages = entries
+  
+  // Extract percentages
+  const categoryData = entries
     .filter(([key]) => key.startsWith("cat_"))
-    .map(([key, value]) => ({
-      bankCategoryId: parseInt(key.replace("cat_", "")),
-      percentage: parseFloat(value as string),
-    }))
-    .filter(r => !isNaN(r.bankCategoryId) && !isNaN(r.percentage));
+    .map(([key, value]) => {
+      const id = parseInt(key.replace("cat_", ""));
+      const percentage = parseFloat(value as string);
+      const limit = parseFloat(formData.get(`limit_${id}`) as string) || null;
+      return { id, percentage, limit };
+    })
+    .filter(r => !isNaN(r.id) && !isNaN(r.percentage));
 
-  if (categoryPercentages.length === 0) return;
+  if (categoryData.length === 0) return;
 
-  const categoryIds = categoryPercentages.map(r => r.bankCategoryId);
+  const categoryIds = categoryData.map(r => r.id);
   const categoriesData = await db
     .select({ id: bankCategories.id, tiers: bankCategories.tiers, name: bankCategories.name })
     .from(bankCategories)
@@ -40,21 +57,39 @@ export async function saveMonthlyRules(formData: FormData) {
 
   const catsMap = new Map(categoriesData.map(c => [c.id, c]));
 
-  const rulesToSave = categoryPercentages.map(r => {
-    const cat = catsMap.get(r.bankCategoryId);
+  const rulesToSave = categoryData.map(r => {
+    const cat = catsMap.get(r.id);
     const isNoCashback = cat?.name === "Без кешбэка";
     
     return {
       userCardId,
-      bankCategoryId: r.bankCategoryId,
+      bankCategoryId: r.id,
       percentage: isNoCashback ? 0 : r.percentage,
       tiers: isNoCashback ? "[]" : (cat?.tiers || "[]"),
       startDate,
-      endDate
+      endDate,
+      cashbackLimit: isNoCashback ? null : r.limit,
     };
   });
 
-  // 1. Delete existing rules for this card in this period
+  // 2. Identify affected categories
+  const affectedCategoryIds: number[] = [];
+  
+  // Find changed or new
+  for (const newRule of rulesToSave) {
+      const old = oldRules.find(o => o.bankCategoryId === newRule.bankCategoryId);
+      if (!old || old.percentage !== newRule.percentage || old.cashbackLimit !== newRule.cashbackLimit) {
+          affectedCategoryIds.push(newRule.bankCategoryId);
+      }
+  }
+  // Find removed
+  for (const old of oldRules) {
+      if (old.bankCategoryId && !rulesToSave.some(r => r.bankCategoryId === old.bankCategoryId)) {
+          affectedCategoryIds.push(old.bankCategoryId);
+      }
+  }
+
+  // 3. Update database
   await db.delete(userCashbackRules)
     .where(
       and(
@@ -64,8 +99,22 @@ export async function saveMonthlyRules(formData: FormData) {
       )
     );
 
-  // 2. Insert new rules
   await db.insert(userCashbackRules).values(rulesToSave);
+
+  // 4. Perform optimized recalculation
+  if (affectedCategoryIds.length > 0) {
+    // Check if card has a global limit. If yes, we must recalculate everything in the month 
+    // because changing one category might affect the limit for others.
+    const [card] = await db.select({ limit: userCards.cashbackLimit }).from(userCards).where(eq(userCards.id, userCardId)).limit(1);
+    
+    if (card?.limit !== null) {
+        // Recalculate ALL for this month (using the super-fast bulk engine)
+        await bulkRecalculateTransactions(userCardId, startDate, endDate);
+    } else {
+        // Recalculate ONLY affected categories (using the super-fast bulk engine)
+        await bulkRecalculateTransactions(userCardId, startDate, endDate, affectedCategoryIds);
+    }
+  }
 
   revalidatePath(`/cards/${userCardId}`);
 }
@@ -89,6 +138,7 @@ export async function copyRulesFromPreviousMonth(userCardId: number, targetMonth
       bankCategoryId: userCashbackRules.bankCategoryId,
       percentage: userCashbackRules.percentage,
       tiers: userCashbackRules.tiers,
+      cashbackLimit: userCashbackRules.cashbackLimit,
       categoryName: bankCategories.name
     })
     .from(userCashbackRules)
@@ -124,10 +174,12 @@ export async function copyRulesFromPreviousMonth(userCardId: number, targetMonth
       bankCategoryId: r.bankCategoryId as number,
       percentage: r.categoryName === "Без кешбэка" ? 0 : r.percentage,
       tiers: r.categoryName === "Без кешбэка" ? "[]" : r.tiers,
+      cashbackLimit: r.categoryName === "Без кешбэка" ? null : r.cashbackLimit,
       startDate: targetStartDate,
       endDate: targetEndDate
     }))
   );
 
+  await recalculateTransactionsForUserCard(userCardId, targetStartDate, targetEndDate);
   revalidatePath(`/cards/${userCardId}`);
 }

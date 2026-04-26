@@ -8,6 +8,7 @@ import { asc } from "drizzle-orm";
 import SearchableSelect from "@/components/SearchableSelect";
 import { getIconUrl } from "@/lib/utils/icons";
 import FindWebsiteButtonWrapper from "@/components/admin/FindWebsiteButtonWrapper";
+import DeleteMerchantButton from "@/components/admin/DeleteMerchantButton";
 
 export default async function MerchantsPage() {
   const allMerchants = await db.select().from(merchants).orderBy(asc(merchants.name));
@@ -176,11 +177,7 @@ export default async function MerchantsPage() {
                 </form>
                 
                 <div className={flex({ justify: "flex-end", mt: "12px" })}>
-                   <form action={deleteMerchant.bind(null, merchant.id)}>
-                      <button type="submit" className={flex({ align: "center", gap: "6px", fontSize: "11px", fontWeight: "700", color: "#ef4444", cursor: "pointer", opacity: 0.7, _hover: { opacity: 1 } })}>
-                        <Trash2 size={12} /> УДАЛИТЬ МЕРЧАНТА
-                      </button>
-                    </form>
+                   <DeleteMerchantButton merchantId={merchant.id} merchantName={merchant.name} />
                 </div>
               </div>
             );

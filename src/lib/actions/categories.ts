@@ -18,8 +18,9 @@ export async function createBankCategory(formData: FormData) {
   const mccText = formData.get("mccText") as string || "";
   const tiersRaw = formData.get("tiers") as string || "[]";
   const merchantIdsRaw = formData.get("merchantIds") as string || "[]";
-  const startDate = formData.get("startDate") as string || new Date().toISOString().split('T')[0];
+  const startDate = formData.get("startDate") as string || "2000-01-01";
   const endDate = formData.get("endDate") as string || null;
+  const cashbackLimit = parseFloat(formData.get("cashbackLimit") as string) || null;
 
   if (!name || isNaN(bankCardId) || isNaN(defaultPercentage)) {
     throw new Error("Invalid data");
@@ -50,10 +51,12 @@ export async function createBankCategory(formData: FormData) {
 
   let finalTiers = tiers;
   let finalPercentage = defaultPercentage;
+  let finalLimit = cashbackLimit;
   
   if (name === "Без кешбэка") {
     finalPercentage = 0;
     finalTiers = "[]";
+    finalLimit = null;
   }
 
   const [newCategory] = await db.insert(bankCategories).values({
@@ -64,6 +67,7 @@ export async function createBankCategory(formData: FormData) {
     tiers: finalTiers,
     startDate,
     endDate: endDate || null,
+    cashbackLimit: finalLimit,
   }).returning();
 
   if (newCategory) {
@@ -78,7 +82,7 @@ export async function createBankCategory(formData: FormData) {
         codes.map(code => ({
           categoryId: newCategory.id,
           mccCode: code,
-          startDate: new Date().toISOString().split('T')[0]
+          startDate: startDate
         }))
       );
     }
@@ -88,7 +92,7 @@ export async function createBankCategory(formData: FormData) {
         merchantIds.map(merchantId => ({
           categoryId: newCategory.id,
           merchantId,
-          startDate: new Date().toISOString().split('T')[0]
+          startDate: startDate
         }))
       );
     }
@@ -111,6 +115,7 @@ export async function updateBankCategory(id: number, formData: FormData) {
   const tiersRaw = formData.get("tiers") as string || "[]";
   const startDate = formData.get("startDate") as string;
   const endDate = formData.get("endDate") as string || null;
+  const cashbackLimit = parseFloat(formData.get("cashbackLimit") as string) || null;
 
   if (isNaN(defaultPercentage)) throw new Error("Invalid data");
 
@@ -126,18 +131,167 @@ export async function updateBankCategory(id: number, formData: FormData) {
 
   let finalPercentage = defaultPercentage;
   let finalTiers = tiers;
+  let finalLimit = cashbackLimit;
 
   if (category.name === "Без кешбэка") {
     finalPercentage = 0;
     finalTiers = "[]";
+    finalLimit = null;
   }
 
   await db.update(bankCategories)
-    .set({ defaultPercentage: finalPercentage, roundingType, tiers: finalTiers, startDate, endDate: endDate || null })
+    .set({ 
+      defaultPercentage: finalPercentage, 
+      roundingType, 
+      tiers: finalTiers, 
+      startDate, 
+      endDate: endDate || null,
+      cashbackLimit: finalLimit
+    })
     .where(eq(bankCategories.id, id));
+
+  // Propagate startDate to active links
+  await db.update(bankCategoryMerchant)
+    .set({ startDate })
+    .where(and(eq(bankCategoryMerchant.categoryId, id), isNull(bankCategoryMerchant.endDate)));
+
+  await db.update(bankCategoryMcc)
+    .set({ startDate })
+    .where(and(eq(bankCategoryMcc.categoryId, id), isNull(bankCategoryMcc.endDate)));
 
   await recalculateTransactionsForBankCard(bankCardId);
   revalidatePath(`/admin/bank-cards/${bankCardId}`);
 }
 
-import { eq } from "drizzle-orm";
+export async function duplicateBankCategory(id: number) {
+  const session = await auth();
+  if (session?.user?.role !== "admin") throw new Error("Unauthorized");
+
+  const [category] = await db.select().from(bankCategories).where(eq(bankCategories.id, id)).limit(1);
+  if (!category) throw new Error("Category not found");
+
+  const today = new Date().toISOString().split('T')[0];
+
+  // 1. Create new category
+  const [newCategory] = await db.insert(bankCategories).values({
+    bankCardId: category.bankCardId,
+    name: `${category.name} (Копия)`,
+    defaultPercentage: category.defaultPercentage,
+    tiers: category.tiers,
+    roundingType: category.roundingType,
+    startDate: today,
+    endDate: null,
+    cashbackLimit: category.cashbackLimit,
+  }).returning();
+
+  if (!newCategory) throw new Error("Failed to create duplicate category");
+
+  // 2. Copy active MCCs
+  const activeMccs = await db
+    .select()
+    .from(bankCategoryMcc)
+    .where(
+      and(
+        eq(bankCategoryMcc.categoryId, category.id),
+        isNull(bankCategoryMcc.endDate)
+      )
+    );
+
+  if (activeMccs.length > 0) {
+    await db.insert(bankCategoryMcc).values(
+      activeMccs.map(m => ({
+        categoryId: newCategory.id,
+        mccCode: m.mccCode,
+        startDate: today,
+      }))
+    );
+  }
+
+  // 3. Copy active Merchants
+  const activeMerchants = await db
+    .select()
+    .from(bankCategoryMerchant)
+    .where(
+      and(
+        eq(bankCategoryMerchant.categoryId, category.id),
+        isNull(bankCategoryMerchant.endDate)
+      )
+    );
+
+  if (activeMerchants.length > 0) {
+    await db.insert(bankCategoryMerchant).values(
+      activeMerchants.map(m => ({
+        categoryId: newCategory.id,
+        merchantId: m.merchantId,
+        startDate: today,
+      }))
+    );
+  }
+
+  await recalculateTransactionsForBankCard(category.bankCardId);
+  revalidatePath(`/admin/bank-cards/${category.bankCardId}`);
+}
+
+export async function deleteBankCategory(id: number) {
+  const session = await auth();
+  if (session?.user?.role !== "admin") throw new Error("Unauthorized");
+
+  const [category] = await db.select({ bankCardId: bankCategories.bankCardId }).from(bankCategories).where(eq(bankCategories.id, id)).limit(1);
+  if (!category) throw new Error("Category not found");
+
+  // 1. Delete associated MCC links
+  await db.delete(bankCategoryMcc).where(eq(bankCategoryMcc.categoryId, id));
+
+  // 2. Delete associated Merchant links
+  await db.delete(bankCategoryMerchant).where(eq(bankCategoryMerchant.categoryId, id));
+
+  // 3. Reset categoryId in transactions (historical data stays, but link is broken)
+  await db.update(transactions)
+    .set({ categoryId: null })
+    .where(eq(transactions.categoryId, id));
+
+  // 4. Delete the category itself
+  await db.delete(bankCategories).where(eq(bankCategories.id, id));
+
+  await recalculateTransactionsForBankCard(category.bankCardId);
+  revalidatePath(`/admin/bank-cards/${category.bankCardId}`);
+}
+
+import { eq, isNull, and } from "drizzle-orm";
+import { transactions, bankExclusions, bankCards } from "@/db/schema";
+
+export async function addBankCardExclusion(bankCardId: number, mccCode: string) {
+  const session = await auth();
+  if (session?.user?.role !== "admin") throw new Error("Unauthorized");
+
+  if (!mccCode || mccCode.length !== 4) throw new Error("Invalid MCC code");
+
+  const [card] = await db.select({ bankId: bankCards.bankId }).from(bankCards).where(eq(bankCards.id, bankCardId)).limit(1);
+  if (!card) throw new Error("Bank card not found");
+
+  await db.insert(bankExclusions).values({
+    bankId: card.bankId,
+    mccCode,
+  }).onConflictDoNothing();
+
+  await recalculateTransactionsForBankCard(bankCardId);
+  revalidatePath(`/admin/bank-cards/${bankCardId}`);
+}
+
+export async function removeBankCardExclusion(bankCardId: number, mccCode: string) {
+  const session = await auth();
+  if (session?.user?.role !== "admin") throw new Error("Unauthorized");
+
+  const [card] = await db.select({ bankId: bankCards.bankId }).from(bankCards).where(eq(bankCards.id, bankCardId)).limit(1);
+  if (!card) throw new Error("Bank card not found");
+
+  await db.delete(bankExclusions).where(
+    and(
+      eq(bankExclusions.bankId, card.bankId),
+      eq(bankExclusions.mccCode, mccCode)
+    )
+  );
+
+  await recalculateTransactionsForBankCard(bankCardId);
+  revalidatePath(`/admin/bank-cards/${bankCardId}`);
+}

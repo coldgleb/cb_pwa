@@ -6,6 +6,7 @@ import { stack, flex } from "../../styled-system/patterns";
 import { ShoppingBag, Users, Save } from "lucide-react";
 import SearchableSelect from "./SearchableSelect";
 import { createTransaction, updateTransaction } from "@/lib/actions/transactions";
+import { getMerchantMccSuggestions } from "@/lib/actions/merchants";
 import { useRouter } from "next/navigation";
 
 interface CardOption {
@@ -48,6 +49,8 @@ export default function TransactionForm({ cards, merchants, mccs, initialData }:
   const [isSplit, setIsSplit] = useState(initialData ? (initialData.paidAmount !== null && initialData.paidAmount !== initialData.amount) : false);
   const [selectedMerchantName, setSelectedMerchantName] = useState(initialData?.merchantName || "");
   const [selectedMcc, setSelectedMcc] = useState(initialData?.mccCode || "");
+  const [suggestedMccs, setSuggestedMccs] = useState<string[]>([]);
+  const [isSearchingMcc, setIsSearchingMcc] = useState(false);
 
   const merchantOptions = useMemo(() => 
     merchants.map(m => ({ value: m.name, label: m.name })), 
@@ -60,25 +63,48 @@ export default function TransactionForm({ cards, merchants, mccs, initialData }:
   );
 
   const mccOptions = useMemo(() => {
-    if (!selectedMerchant) {
+    let allowedCodes: Set<string> | null = null;
+
+    if (selectedMerchant) {
+      allowedCodes = new Set([
+        selectedMerchant.mainMcc,
+        ...selectedMerchant.additionalMccs.split(",").map(c => c.trim())
+      ]);
+    } else if (suggestedMccs.length > 0) {
+      allowedCodes = new Set(suggestedMccs);
+    }
+
+    if (!allowedCodes) {
       return mccs.map(m => ({ value: m.code, label: `${m.code} — ${m.description}` }));
     }
 
-    const allowedCodes = new Set([
-      selectedMerchant.mainMcc,
-      ...selectedMerchant.additionalMccs.split(",").map(c => c.trim())
-    ]);
-
     return mccs
-      .filter(m => allowedCodes.has(m.code))
+      .filter(m => allowedCodes!.has(m.code))
       .map(m => ({ value: m.code, label: `${m.code} — ${m.description}` }));
-  }, [mccs, selectedMerchant]);
+  }, [mccs, selectedMerchant, suggestedMccs]);
 
-  const handleMerchantChange = (name: string) => {
+  const handleMerchantChange = async (name: string) => {
     setSelectedMerchantName(name);
+    
     const m = merchants.find(merch => merch.name === name);
     if (m) {
       setSelectedMcc(m.mainMcc);
+      setSuggestedMccs([]);
+    } else if (name) {
+      // New merchant, try to find suggestions
+      setIsSearchingMcc(true);
+      try {
+        const suggestions = await getMerchantMccSuggestions(name);
+        if (suggestions) {
+          const codes = [suggestions.mainMcc, ...suggestions.additionalMccs.split(",").map(c => c.trim())];
+          setSuggestedMccs(codes);
+          setSelectedMcc(suggestions.mainMcc);
+        }
+      } finally {
+        setIsSearchingMcc(false);
+      }
+    } else {
+      setSuggestedMccs([]);
     }
   };
 
@@ -206,20 +232,35 @@ export default function TransactionForm({ cards, merchants, mccs, initialData }:
             name="mccCode"
             options={mccOptions}
             required
-            placeholder={selectedMerchantName ? "Выберите MCC из списка магазина..." : "Сначала выберите магазин"}
+            placeholder={isSearchingMcc ? "Ищем подходящие коды..." : (selectedMerchantName ? "Выберите MCC из списка магазина..." : "Сначала выберите магазин")}
             value={selectedMcc}
             onChange={setSelectedMcc}
+            disabled={isSearchingMcc}
           />
         </div>
 
-        <div className={stack({ gap: "6px" })}>
-          <label className="sber-label">ДАТА</label>
-          <input 
-            name="date" 
-            type="date" 
-            defaultValue={(initialData?.transactionDate || new Date()).toISOString().split('T')[0]} 
-            className="sber-input" 
-          />
+        <div className={flex({ gap: "12px" })}>
+          <div className={stack({ gap: "6px", flex: 1 })}>
+            <label className="sber-label">ДАТА</label>
+            <input 
+              name="date" 
+              type="date" 
+              defaultValue={(initialData?.transactionDate || new Date()).toISOString().split('T')[0]} 
+              className="sber-input" 
+            />
+          </div>
+          <div className={stack({ gap: "6px", flex: 1 })}>
+            <label className="sber-label">ВРЕМЯ</label>
+            <input 
+              name="time" 
+              type="time" 
+              defaultValue={initialData?.transactionDate 
+                ? new Date(initialData.transactionDate).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', hour12: false })
+                : new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', hour12: false })
+              } 
+              className="sber-input" 
+            />
+          </div>
         </div>
 
         <div className={stack({ gap: "6px" })}>

@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import BottomNavWrapper from "@/components/BottomNavWrapper";
+import { ToastProvider } from "@/components/Toast";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -40,8 +41,10 @@ export default function RootLayout({
   return (
     <html lang="ru" className={`${geistSans.variable} ${geistMono.variable}`}>
       <body style={{ paddingBottom: 'calc(80px + env(safe-area-inset-bottom))' }}>
-        {children}
-        <BottomNavWrapper />
+        <ToastProvider>
+          {children}
+          <BottomNavWrapper />
+        </ToastProvider>
       </body>
     </html>
   );

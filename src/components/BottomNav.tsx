@@ -17,10 +17,16 @@ export default function BottomNav({ isAdmin = false }: BottomNavProps) {
   // Actually the user wants "Админ" in the bottom nav, so we might want to show it everywhere 
   // or only on user pages. Let's show it if it's not the root login page.
   
-  const navItems = [
+  interface NavItem {
+    label: string;
+    href: string;
+    icon: any;
+    isMain?: boolean;
+  }
+
+  const navItems: NavItem[] = [
     { label: "Главная", href: "/", icon: Home },
     { label: "Карты", href: "/cards", icon: CreditCard },
-    { label: "Покупка", href: "/transactions/new", icon: PlusCircle, isMain: true },
     { label: "История", href: "/transactions", icon: History },
     { label: "Статистика", href: "/statistics", icon: BarChart2 },
   ];

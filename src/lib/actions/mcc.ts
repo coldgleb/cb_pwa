@@ -39,7 +39,8 @@ export async function linkMccToCategory(categoryId: number, mccCode: string, sta
   const session = await auth();
   if (session?.user?.role !== "admin") throw new Error("Unauthorized");
 
-  const effectiveDate = startDate || new Date().toISOString().split('T')[0];
+  const [cat] = await db.select({ startDate: bankCategories.startDate, bankCardId: bankCategories.bankCardId }).from(bankCategories).where(eq(bankCategories.id, categoryId));
+  const effectiveDate = startDate || "2000-01-01";
 
   // Expire any existing active link for this MCC in this category
   await db.update(bankCategoryMcc)
@@ -58,8 +59,44 @@ export async function linkMccToCategory(categoryId: number, mccCode: string, sta
     startDate: effectiveDate,
   });
 
-  // Find bankCardId to recalculate
-  const [cat] = await db.select({ bankCardId: bankCategories.bankCardId }).from(bankCategories).where(eq(bankCategories.id, categoryId));
+  if (cat) await recalculateTransactionsForBankCard(cat.bankCardId);
+
+  revalidatePath(`/admin/categories/${categoryId}/composition`);
+}
+
+export async function linkMultipleMccToCategory(categoryId: number, mccText: string) {
+  const session = await auth();
+  if (session?.user?.role !== "admin") throw new Error("Unauthorized");
+
+  const codes = [...new Set(mccText.match(/\b\d{4}\b/g) || [])];
+  if (codes.length === 0) return;
+
+  const [cat] = await db.select({ startDate: bankCategories.startDate, bankCardId: bankCategories.bankCardId }).from(bankCategories).where(eq(bankCategories.id, categoryId));
+  const effectiveDate = "2000-01-01";
+  const yesterday = new Date(new Date(effectiveDate).getTime() - 86400000).toISOString().split('T')[0];
+
+  for (const code of codes) {
+    await db.insert(mccCodes)
+      .values({ code, description: "Добавлен автоматически" })
+      .onConflictDoNothing();
+
+    await db.update(bankCategoryMcc)
+      .set({ endDate: yesterday })
+      .where(
+        and(
+          eq(bankCategoryMcc.categoryId, categoryId),
+          eq(bankCategoryMcc.mccCode, code),
+          isNull(bankCategoryMcc.endDate)
+        )
+      );
+
+    await db.insert(bankCategoryMcc).values({
+      categoryId,
+      mccCode: code,
+      startDate: effectiveDate,
+    });
+  }
+
   if (cat) await recalculateTransactionsForBankCard(cat.bankCardId);
 
   revalidatePath(`/admin/categories/${categoryId}/composition`);
@@ -89,13 +126,16 @@ export async function unlinkMccFromCategory(categoryId: number, mccCode: string,
   revalidatePath(`/admin/categories/${categoryId}/composition`);
 }
 
-import { bankCategoryMerchant } from "@/db/schema";
+import { bankCategoryMerchant, merchants } from "@/db/schema";
+import { recalculateTransactionsForMerchantNames } from "./cashback-engine";
 
 export async function linkMerchantToCategory(categoryId: number, merchantId: number, formData?: FormData) {
   const session = await auth();
   if (session?.user?.role !== "admin") throw new Error("Unauthorized");
 
-  const effectiveDate = new Date().toISOString().split('T')[0];
+  const [cat] = await db.select({ startDate: bankCategories.startDate, bankCardId: bankCategories.bankCardId }).from(bankCategories).where(eq(bankCategories.id, categoryId));
+  const [merchant] = await db.select({ name: merchants.name }).from(merchants).where(eq(merchants.id, merchantId));
+  const effectiveDate = "2000-01-01";
 
   // Expire any existing active link
   await db.update(bankCategoryMerchant)
@@ -114,8 +154,12 @@ export async function linkMerchantToCategory(categoryId: number, merchantId: num
     startDate: effectiveDate,
   });
 
-  const [cat] = await db.select({ bankCardId: bankCategories.bankCardId }).from(bankCategories).where(eq(bankCategories.id, categoryId));
-  if (cat) await recalculateTransactionsForBankCard(cat.bankCardId);
+  if (merchant) {
+    await recalculateTransactionsForMerchantNames([merchant.name]);
+  }
+  if (cat) {
+    await recalculateTransactionsForBankCard(cat.bankCardId);
+  }
 
   revalidatePath(`/admin/categories/${categoryId}/composition`);
 }

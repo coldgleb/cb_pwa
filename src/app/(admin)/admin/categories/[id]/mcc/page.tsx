@@ -1,12 +1,13 @@
 import { db } from "@/db";
 import { bankCategories, mccCodes, bankCategoryMcc, bankCards, banks, merchants, bankCategoryMerchant } from "@/db/schema";
-import { linkMccToCategory, unlinkMccFromCategory, linkMerchantToCategory, unlinkMerchantFromCategory } from "@/lib/actions/mcc";
+import { linkMccToCategory, unlinkMccFromCategory, linkMerchantToCategory, unlinkMerchantFromCategory, linkMultipleMccToCategory } from "@/lib/actions/mcc";
 import { css } from "../../../../../../../styled-system/css";
 import { stack, flex } from "../../../../../../../styled-system/patterns";
 import { eq, and, notInArray, isNull } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Trash2, Plus, Store } from "lucide-react";
 import SearchableSelect from "@/components/SearchableSelect";
+import CopyMccsButton from "@/components/admin/CopyMccsButton";
 
 export default async function CategoryCompositionPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -95,6 +96,7 @@ export default async function CategoryCompositionPage({ params }: { params: Prom
           <section className={stack({ gap: "16px" })}>
             <div className={flex({ align: "center", justify: "space-between" })}>
               <h2 className="sber-label">ПРИВЯЗАННЫЕ MCC-КОДЫ</h2>
+              <CopyMccsButton mccs={linkedMcc.map(m => m.code).join(", ")} />
             </div>
             
             <div className="sber-card" style={{ padding: "16px" }}>
@@ -102,18 +104,34 @@ export default async function CategoryCompositionPage({ params }: { params: Prom
                 "use server";
                 const code = formData.get("mccCode") as string;
                 if (code) await linkMccToCategory(categoryId, code);
-              }} className={stack({ gap: "12px", mb: "16px" })}>
-                <div className={flex({ gap: "8px", align: "end" })}>
-                  <div className={stack({ gap: "4px", flex: 1 })}>
-                    <label className={css({ fontSize: "10px", fontWeight: "800", color: "secondaryText", textTransform: "uppercase" })}>Добавить код</label>
-                    <SearchableSelect 
-                      name="mccCode"
-                      options={mccOptions}
-                      placeholder="Выберите MCC..."
+
+                const mccText = formData.get("mccText") as string;
+                if (mccText) await linkMultipleMccToCategory(categoryId, mccText);
+              }} className={stack({ gap: "16px", mb: "24px" })}>
+                <div className={stack({ gap: "12px" })}>
+                  <div className={flex({ gap: "8px", align: "end" })}>
+                    <div className={stack({ gap: "4px", flex: 1 })}>
+                      <label className={css({ fontSize: "10px", fontWeight: "800", color: "secondaryText", textTransform: "uppercase" })}>Добавить код (выбор из списка)</label>
+                      <SearchableSelect 
+                        name="mccCode"
+                        options={mccOptions}
+                        placeholder="Выберите MCC..."
+                      />
+                    </div>
+                  </div>
+
+                  <div className={stack({ gap: "4px" })}>
+                    <label className={css({ fontSize: "10px", fontWeight: "800", color: "secondaryText", textTransform: "uppercase" })}>Или вставьте список кодов (текстом)</label>
+                    <textarea 
+                      name="mccText"
+                      placeholder="Например: 5411, 5812. Любой текст с 4-значными кодами будет распознан автоматически."
+                      className="sber-input"
+                      style={{ minHeight: "60px", paddingTop: "8px", fontSize: "13px" }}
                     />
                   </div>
-                  <button type="submit" className="sber-button" style={{ width: "auto", padding: "12px 16px" }}>
-                    <Plus size={18} />
+                  
+                  <button type="submit" className="sber-button">
+                    <Plus size={18} style={{ marginRight: "8px" }} /> ДОБАВИТЬ MCC
                   </button>
                 </div>
               </form>
