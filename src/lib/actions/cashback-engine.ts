@@ -248,9 +248,9 @@ export async function bulkRecalculateTransactions(
 
           // G. Enforce Limits
           // Category Limit
-          if (rule.cashbackLimit !== null) {
+          if (categoryLimit !== null) {
               const used = categoryUsageMap.get(category.id) || 0;
-              const remaining = Math.max(0, rule.cashbackLimit - used);
+              const remaining = Math.max(0, categoryLimit - used);
               cb = Math.min(cb, remaining);
               categoryUsageMap.set(category.id, used + cb);
           }
