@@ -196,18 +196,24 @@ export async function bulkRecalculateTransactions(
           tiers = rule.tiers;
           categoryLimit = rule.cashbackLimit;
           ruleFound = true;
-        } else {
-          // Fallback 1: Bank default for THIS category
+        } else if (isOthers(category.name) || isNoCashback(category.name)) {
+          // For base/system categories, use bank default if no specific user rule
           percentage = category.defaultPercentage;
           tiers = category.tiers;
           categoryLimit = category.cashbackLimit;
-          ruleFound = true; // Consider found to use bank default
+          ruleFound = true;
+        } else {
+          // Selectable category but NO user rule for this month. 
+          ruleFound = false;
         }
 
         // Fallback 2: "Others" rule if bank default is 0 and it's not the "Others" category
-        if (percentage === 0 && !isOthers(category.name)) {
+        // Actually, fallback if category match was not selected OR no category match found
+        if (!ruleFound || (percentage === 0 && !isOthers(category.name) && !isNoCashback(category.name))) {
             const baseCat = allCategories.find(c => isOthers(c.name) && c.startDate <= txDateStr && (!c.endDate || c.endDate >= txDateStr));
             if (baseCat) {
+                category = baseCat; // Update category object for rounding and metadata
+                finalCategoryId = baseCat.id;
                 const baseRule = allUserRules.find(r => 
                     r.bankCategoryId === baseCat.id &&
                     r.startDate <= txDateStr &&
@@ -217,6 +223,10 @@ export async function bulkRecalculateTransactions(
                     percentage = baseRule.percentage;
                     tiers = baseRule.tiers;
                     categoryLimit = baseRule.cashbackLimit;
+                } else {
+                    percentage = baseCat.defaultPercentage;
+                    tiers = baseCat.tiers;
+                    categoryLimit = baseCat.cashbackLimit;
                 }
             }
         }
@@ -235,7 +245,7 @@ export async function bulkRecalculateTransactions(
           const histSetting = allHistoricalSettings.find(s => s.startDate <= txDateStr);
           const cardRounding = histSetting?.roundingType || cardInfo.baseRounding || "no_rounding";
           const categoryRounding = category.roundingType || "inherit";
-          const finalRounding = categoryRounding === "inherit" ? cardRounding : categoryRounding;
+          const finalRounding = (categoryRounding === "inherit" || !categoryRounding) ? cardRounding : categoryRounding;
 
           let calcAmount = paidAmount;
           if (finalRounding === "amount_100_down") calcAmount = Math.floor(paidAmount / 100) * 100;
@@ -454,7 +464,8 @@ export async function calculateCashbackForTransaction(
         name: bankCategories.name, 
         roundingType: bankCategories.roundingType,
         defaultPercentage: bankCategories.defaultPercentage,
-        tiers: bankCategories.tiers
+        tiers: bankCategories.tiers,
+        cashbackLimit: bankCategories.cashbackLimit
       })
       .from(bankCategories)
       .where(
@@ -483,7 +494,7 @@ export async function calculateCashbackForTransaction(
 
   if (categoryId && isNoCashback(categoryName)) {
     console.log(`[Engine] ${merchantName}: Match NoCashback category. 0%`);
-    return { cashback: 0, categoryId };
+    return { cashback: 0, categoryId, nominalPercentage: 0 };
   }
 
   // 6. Calculate percentage from User Rules
@@ -516,17 +527,22 @@ export async function calculateCashbackForTransaction(
       ruleTiers = rule.tiers;
       categoryLimit = rule.cashbackLimit;
       ruleFound = true;
-    } else {
-      // No user rule, use bank default percentage for THIS category
+    } else if (isOthers(categoryName) || isNoCashback(categoryName)) {
+      // For base/system categories, use bank default if no specific user rule
       console.log(`[Engine] ${merchantName}: No user rule for ${categoryName}, using bank default: ${defaultPercentage}%`);
       percentage = defaultPercentage;
       ruleTiers = defaultTiers;
-      ruleFound = true; // Mark as found to prevent falling back to "Others" rule
+      ruleFound = true;
+    } else {
+      // Selectable category but NO user rule for this month. 
+      // Mark as NOT FOUND to trigger fallback to base category.
+      console.log(`[Engine] ${merchantName}: ${categoryName} is NOT selected for this month. Falling back.`);
+      ruleFound = false;
     }
   }
 
-  // If we still haven't found a rule (should not happen if category was found, but for safety)
-  if (!ruleFound && categoryId && !isOthers(categoryName)) {
+  // If we still haven't found a rule (either category not mapped OR mapping is unselected)
+  if (!ruleFound && (!categoryId || !isOthers(categoryName))) {
     const baseCat = await getBaseCategory();
     if (baseCat && baseCat.id !== categoryId) {
       const [baseRule] = await db
@@ -547,11 +563,19 @@ export async function calculateCashbackForTransaction(
         .limit(1);
 
       if (baseRule) {
-        console.log(`[Engine] ${merchantName}: No rule for ${categoryName}, using fallback from ${baseCat.name}. Base%: ${baseRule.percentage}`);
+        console.log(`[Engine] ${merchantName}: Falling back to user rule for ${baseCat.name}. Base%: ${baseRule.percentage}`);
         percentage = baseRule.percentage;
         ruleTiers = baseRule.tiers;
         categoryLimit = baseRule.cashbackLimit;
+      } else {
+        console.log(`[Engine] ${merchantName}: Falling back to bank default for ${baseCat.name}. Base%: ${baseCat.defaultPercentage}`);
+        percentage = baseCat.defaultPercentage;
+        ruleTiers = baseCat.tiers;
+        categoryLimit = baseCat.cashbackLimit;
       }
+      categoryId = baseCat.id;
+      categoryName = baseCat.name;
+      categoryRounding = baseCat.roundingType;
     }
   }
 
@@ -624,7 +648,7 @@ export async function calculateCashbackForTransaction(
     calculatedCashback = Math.min(calculatedCashback, remainingGlobally);
   }
 
-  return { cashback: calculatedCashback, categoryId };
+  return { cashback: calculatedCashback, categoryId, nominalPercentage: percentage };
 }
 
 export async function recalculateTransactions(txs: any[]) {

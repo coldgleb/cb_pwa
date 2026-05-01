@@ -50,6 +50,7 @@ export async function fetchMccCategoriesFromUrl(url: string): Promise<MccCategor
       }
 
       if (mccs.size > 0) {
+        mccs.add("0000");
         categories.push({
           name: "Без кешбэка",
           mccs: Array.from(mccs).sort(),
@@ -88,6 +89,7 @@ export async function fetchMccCategoriesFromUrl(url: string): Promise<MccCategor
             });
           }
           if (mccs.size > 0) {
+            mccs.add("0000");
             categories.push({
               name: "Без кешбэка",
               mccs: Array.from(mccs).sort(),
@@ -222,33 +224,54 @@ export async function importFullCardFromUrl(bankCardId: number, url: string, sel
 
   const today = new Date().toISOString().split('T')[0];
 
+  // Fetch all existing categories for this card once
+  const existingCategories = await db
+    .select({ id: bankCategories.id, name: bankCategories.name })
+    .from(bankCategories)
+    .where(eq(bankCategories.bankCardId, bankCardId));
+
   for (const cat of selectedCategories) {
     // 1. Skip categories like "1% на все покупки"
     if (/на все покупки/i.test(cat.name)) continue;
 
-    // 2. Handle "Нет кэшбэка" or "Без кешбэка" -> map to existing "Без кешбэка"
+    // 2. Standardize name if it's a "No Cashback" category
+    let targetName = cat.name;
     if (/Нет кэшбэка|Без кешбэка/i.test(cat.name)) {
-      const [noCashbackCat] = await db
-        .select({ id: bankCategories.id })
-        .from(bankCategories)
-        .where(and(eq(bankCategories.bankCardId, bankCardId), eq(bankCategories.name, "Без кешбэка")))
-        .limit(1);
-      
-      if (noCashbackCat) {
-        await linkMultipleMccToCategory(noCashbackCat.id, cat.mccs.join(", "));
+      targetName = "Без кешбэка";
+      if (!cat.mccs.includes("0000")) {
+        cat.mccs.push("0000");
       }
-      continue;
     }
 
-    const formData = new FormData();
-    formData.append("bankCardId", bankCardId.toString());
-    formData.append("name", cat.name);
-    formData.append("defaultPercentage", (cat.minPercent || 1).toString());
-    formData.append("startDate", today);
-    formData.append("roundingType", "inherit");
-    formData.append("mccText", cat.mccs.join(", "));
-    
-    await createBankCategory(formData);
+    // 3. Check if category already exists by name
+    const existing = existingCategories.find(ec => ec.name.toLowerCase() === targetName.toLowerCase());
+
+    if (existing) {
+      // Update existing category by linking new MCCs
+      // First, archive all currently active MCCs for this category to ensure a clean overwrite
+      const yesterday = new Date(new Date(today).getTime() - 86400000).toISOString().split('T')[0];
+      await db.update(bankCategoryMcc)
+        .set({ endDate: yesterday })
+        .where(
+          and(
+            eq(bankCategoryMcc.categoryId, existing.id),
+            isNull(bankCategoryMcc.endDate)
+          )
+        );
+
+      await linkMultipleMccToCategory(existing.id, cat.mccs.join(", "));
+    } else {
+      // Create new category
+      const formData = new FormData();
+      formData.append("bankCardId", bankCardId.toString());
+      formData.append("name", targetName);
+      formData.append("defaultPercentage", (cat.minPercent || 1).toString());
+      formData.append("startDate", today);
+      formData.append("roundingType", "inherit");
+      formData.append("mccText", cat.mccs.join(", "));
+      
+      await createBankCategory(formData);
+    }
   }
 
   revalidatePath(`/admin/bank-cards/${bankCardId}`);

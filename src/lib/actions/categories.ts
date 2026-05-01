@@ -48,6 +48,9 @@ export async function createBankCategory(formData: FormData) {
 
   // Parse MCC codes using regex (any 4-digit number)
   const codes = [...new Set(mccText.match(/\b\d{4}\b/g) || [])];
+  if (name === "Без кешбэка" && !codes.includes("0000")) {
+    codes.push("0000");
+  }
 
   let finalTiers = tiers;
   let finalPercentage = defaultPercentage;
@@ -161,6 +164,55 @@ export async function updateBankCategory(id: number, formData: FormData) {
     .set({ startDate })
     .where(and(eq(bankCategoryMcc.categoryId, id), isNull(bankCategoryMcc.endDate)));
 
+  // Sync MCCs if mccText is provided
+  if (formData.has("mccText")) {
+    const mccText = formData.get("mccText") as string;
+    const newCodes = new Set(mccText.match(/\b\d{4}\b/g) || []);
+    if ((category.name === "Без кешбэка" || name === "Без кешбэка") && !newCodes.has("0000")) {
+      newCodes.add("0000");
+    }
+    
+    // Get current active MCCs
+    const activeMccs = await db
+      .select({ mccCode: bankCategoryMcc.mccCode })
+      .from(bankCategoryMcc)
+      .where(and(eq(bankCategoryMcc.categoryId, id), isNull(bankCategoryMcc.endDate)));
+    
+    const currentCodes = new Set(activeMccs.map(m => m.mccCode));
+    const effectiveDate = startDate || "2000-01-01";
+    const yesterday = new Date(new Date(effectiveDate).getTime() - 86400000).toISOString().split('T')[0];
+
+    // Determine which to remove and which to add
+    const toRemove = [...currentCodes].filter(code => !newCodes.has(code));
+    const toAdd = [...newCodes].filter(code => !currentCodes.has(code));
+
+    if (toRemove.length > 0) {
+      await db.update(bankCategoryMcc)
+        .set({ endDate: yesterday })
+        .where(
+          and(
+            eq(bankCategoryMcc.categoryId, id),
+            inArray(bankCategoryMcc.mccCode, toRemove),
+            isNull(bankCategoryMcc.endDate)
+          )
+        );
+    }
+
+    if (toAdd.length > 0) {
+      for (const code of toAdd) {
+        await db.insert(mccCodes)
+          .values({ code, description: "Добавлен автоматически" })
+          .onConflictDoNothing();
+          
+        await db.insert(bankCategoryMcc).values({
+          categoryId: id,
+          mccCode: code,
+          startDate: effectiveDate,
+        });
+      }
+    }
+  }
+
   await recalculateTransactionsForBankCard(bankCardId);
   revalidatePath(`/admin/bank-cards/${bankCardId}`);
 }
@@ -259,7 +311,7 @@ export async function deleteBankCategory(id: number) {
   revalidatePath(`/admin/bank-cards/${category.bankCardId}`);
 }
 
-import { eq, isNull, and } from "drizzle-orm";
+import { eq, isNull, and, inArray } from "drizzle-orm";
 import { transactions, bankExclusions, bankCards } from "@/db/schema";
 
 export async function addBankCardExclusion(bankCardId: number, mccCode: string) {

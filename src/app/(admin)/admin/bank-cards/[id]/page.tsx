@@ -1,19 +1,20 @@
 import { db } from "@/db";
 import { banks, bankCards, bankCategories, bankCategoryMcc, bankCardSettings, merchants, bankCategoryMerchant, mccCodes } from "@/db/schema";
-import { updateBankCard } from "@/lib/actions/bank-cards";
+import { updateBankCard, recalculateTransactionsForBankCard } from "@/lib/actions/bank-cards";
 import { createBankCategory, updateBankCategory, duplicateBankCategory } from "@/lib/actions/categories";
 import { addBankCardSetting, deleteBankCardSetting } from "@/lib/actions/bank-card-settings";
 import { css } from "../../../../../../styled-system/css";
 import { stack, flex, wrap, grid } from "../../../../../../styled-system/patterns";
 import { eq, inArray, desc, asc, and, isNull } from "drizzle-orm";
 import { notFound, redirect } from "next/navigation";
-import { ArrowLeft, ShieldCheck, Ban, Tag, Plus, Save, Trash2, History as HistoryIcon, Archive, Store, Copy } from "lucide-react";
+import { ArrowLeft, ShieldCheck, Ban, Tag, Plus, Save, Trash2, History as HistoryIcon, Archive, Store, Copy, Settings } from "lucide-react";
 import TiersEditor from "@/components/admin/TiersEditor";
 import MultiSearchableSelect from "@/components/MultiSearchableSelect";
 import SearchableSelect from "@/components/SearchableSelect";
 import { getIconUrl } from "@/lib/utils/icons";
 import CategoryActions from "@/components/admin/CategoryActions";
 import MccImportFromUrl from "@/components/admin/MccImportFromUrl";
+import RecalculateCardTransactionsButton from "@/components/admin/RecalculateCardTransactionsButton";
 
 export default async function EditBankCardPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -72,7 +73,7 @@ export default async function EditBankCardPage({ params }: { params: Promise<{ i
         mccCode: bankCategoryMcc.mccCode,
       })
       .from(bankCategoryMcc)
-      .where(inArray(bankCategoryMcc.categoryId, categoryIds))
+      .where(and(inArray(bankCategoryMcc.categoryId, categoryIds), isNull(bankCategoryMcc.endDate)))
     : [];
 
   const mccsByCategory = linkedMccs.reduce((acc, curr) => {
@@ -108,211 +109,221 @@ export default async function EditBankCardPage({ params }: { params: Promise<{ i
 
   return (
     <div className="sber-container-admin">
-      <div className={stack({ gap: "40px" })}>
+      <div className={stack({ gap: "32px" })}>
         <header className={stack({ gap: "8px" })}>
           <a href="/admin/bank-cards" className={flex({ align: "center", gap: "8px", fontSize: "14px", fontWeight: "800", color: "var(--sber-green)" })}>
             <ArrowLeft size={16} /> НАЗАД К КАРТАМ
           </a>
-          <h1 className={css({ fontSize: "32px", fontWeight: "800", color: "var(--foreground)" })}>Редактировать тип карты</h1>
+          <h1 className={css({ fontSize: "32px", fontWeight: "800", color: "var(--foreground)" })}>Управление картой</h1>
         </header>
 
-        <section className="sber-card">
-          <form action={async (formData) => {
-            "use server";
-            await updateCardWithId(formData);
-            redirect("/admin/bank-cards");
-          }} className={stack({ gap: "24px" })}>
-            <div className={stack({ gap: "8px" })}>
-              <label className="sber-label">БАНК</label>
-              <SearchableSelect 
-                name="bankId" 
-                defaultValue={card.bankId.toString()}
-                options={allBanks.map(bank => ({ value: bank.id.toString(), label: bank.name }))}
-                required
-              />
-            </div>
-            <div className={stack({ gap: "8px" })}>
-              <label className="sber-label">НАЗВАНИЕ КАРТЫ</label>
-              <input
-                name="name"
-                type="text"
-                defaultValue={card.name}
-                required
-                className="sber-input"
-              />
-            </div>
-            <div className={stack({ gap: "8px" })}>
-              <label className="sber-label">ОКРУГЛЕНИЕ ПО УМОЛЧАНИЮ (ЕСЛИ НЕТ ИСТОРИИ)</label>
-              <SearchableSelect 
-                name="roundingType" 
-                defaultValue={card.roundingType}
-                options={roundingOptions}
-                required
-              />
-            </div>
-            <div className={stack({ gap: "8px" })}>
-              <label className="sber-label">ЛИМИТ КЕШБЭКА В МЕСЯЦ (ПО УМОЛЧАНИЮ)</label>
-              <input
-                name="defaultCashbackLimit"
-                type="number"
-                defaultValue={card.defaultCashbackLimit || ""}
-                placeholder="Например, 5000"
-                className="sber-input"
-              />
-            </div>
-            <button type="submit" className="sber-button">
-              Обновить тип карты
-            </button>
-          </form>
-        </section>
+        {/* Top Control Grid */}
+        <div className={grid({ columns: { base: 1, lg: 2, xl: 3 }, gap: "20px", alignItems: "start" })}>
 
-        <section className={stack({ gap: "16px" })}>
-          <p className="sber-label">ТЕКУЩЕЕ ДЕЙСТВУЮЩЕЕ ОКРУГЛЕНИЕ</p>
-          <div className={css({ px: "24px", py: "20px", bg: "var(--sber-green)", color: "white", borderRadius: "18px", shadow: "md", fontWeight: "800", fontSize: "18px" })}>
-            {roundingOptions.find(o => o.value === effectiveSetting.roundingType)?.label}
-          </div>
-        </section>
-
-        <hr className={css({ borderColor: "var(--border-color)" })} />
-
-        {/* Historical Rounding Rules */}
-        <section className={stack({ gap: "24px" })}>
-          <div className={flex({ align: "center", gap: "12px" })}>
-            <div className={css({ p: "8px", bg: "#6366f1", borderRadius: "10px", color: "white" })}>
-              <HistoryIcon size={20} />
-            </div>
-            <h2 className={css({ fontSize: "24px", fontWeight: "800", color: "var(--foreground)" })}>История правил округления</h2>
-          </div>
-
-          <section className="sber-card">
-            <h3 className={css({ fontSize: "16px", fontWeight: "700", mb: "20px", color: "var(--secondary-text)" })}>НОВОЕ ПРАВИЛО</h3>
-            <form action={addBankCardSetting} className={stack({ gap: "24px" })}>
-              <input type="hidden" name="bankCardId" value={cardId} />
-              <div className={flex({ gap: "16px", wrap: "wrap" })}>
-                <div className={stack({ gap: "8px", flex: 1, minW: "250px" })}>
-                  <label className="sber-label">ТИП ОКРУГЛЕНИЯ</label>
-                  <SearchableSelect name="roundingType" required options={roundingOptions} />
-                </div>
-                <div className={stack({ gap: "8px", flex: 1, minW: "250px" })}>
-                  <label className="sber-label">ДЕЙСТВУЕТ С ДАТЫ</label>
-                  <input name="startDate" type="date" required className="sber-input" />
-                </div>
+          {/* Column 1: Edit Card */}
+          <section className={stack({ gap: "16px" })}>
+            <div className={flex({ justify: "space-between", align: "center", gap: "12px" })}>
+              <div className={flex({ align: "center", gap: "12px" })}>
+                <div className={css({ p: "8px", bg: "var(--sber-green)", borderRadius: "10px", color: "white" })}><Settings size={20} /></div>
+                <h2 className={css({ fontSize: "20px", fontWeight: "800", color: "var(--foreground)" })}>Настройки</h2>
               </div>
-              <button type="submit" className="sber-button" style={{ backgroundColor: "#6366f1" }}>
-                Добавить в историю
-              </button>
-            </form>
+              
+              <RecalculateCardTransactionsButton cardId={cardId} />
+            </div>
+            <div className="sber-card">
+              <form action={async (formData) => {
+                "use server";
+                await updateCardWithId(formData);
+                redirect("/admin/bank-cards");
+              }} className={stack({ gap: "24px" })}>
+                <div className={stack({ gap: "8px" })}>
+                  <label className="sber-label">БАНК</label>
+                  <SearchableSelect 
+                    name="bankId" 
+                    defaultValue={card.bankId.toString()}
+                    options={allBanks.map(bank => ({ value: bank.id.toString(), label: bank.name }))}
+                    required
+                  />
+                </div>
+                <div className={stack({ gap: "8px" })}>
+                  <label className="sber-label">НАЗВАНИЕ КАРТЫ</label>
+                  <input
+                    name="name"
+                    type="text"
+                    defaultValue={card.name}
+                    required
+                    className="sber-input"
+                  />
+                </div>
+                <div className={stack({ gap: "8px" })}>
+                  <label className="sber-label">ОКРУГЛЕНИЕ ПО УМОЛЧАНИЮ</label>
+                  <SearchableSelect 
+                    name="roundingType" 
+                    defaultValue={card.roundingType}
+                    options={roundingOptions}
+                    required
+                  />
+                </div>
+                <div className={stack({ gap: "8px" })}>
+                  <label className="sber-label">ЛИМИТ КЕШБЭКА В МЕСЯЦ</label>
+                  <input
+                    name="defaultCashbackLimit"
+                    type="number"
+                    defaultValue={card.defaultCashbackLimit || ""}
+                    placeholder="Например, 5000"
+                    className="sber-input"
+                  />
+                </div>
+                <button type="submit" className="sber-button">
+                  Обновить настройки
+                </button>
+              </form>
+            </div>
           </section>
 
-          <div className={grid({ columns: { base: 1, md: 2, lg: 3 }, gap: "16px" })}>
-            {historicalSettings.map(s => (
-              <div key={s.id} className="sber-card" style={{ padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div className={stack({ gap: "4px" })}>
-                  <p className={css({ fontWeight: "700", fontSize: "17px", color: "var(--foreground)" })}>
-                    {roundingOptions.find(o => o.value === s.roundingType)?.label}
-                  </p>
-                  <p className={css({ fontSize: "13px", color: "var(--secondary-text)" })}>
-                    Действует с: <strong>{s.startDate.split('-').reverse().join('.')}</strong>
-                  </p>
+          {/* Column 2: Rounding Rules */}
+          <section className={stack({ gap: "16px" })}>
+            <div className={flex({ align: "center", gap: "12px" })}>
+              <div className={css({ p: "8px", bg: "#6366f1", borderRadius: "10px", color: "white" })}><HistoryIcon size={20} /></div>
+              <h2 className={css({ fontSize: "20px", fontWeight: "800", color: "var(--foreground)" })}>Округление</h2>
+            </div>
+            
+            <div className={css({ p: "16px", bg: "var(--sber-green)", color: "white", borderRadius: "16px", shadow: "sm", fontWeight: "700", fontSize: "15px" })}>
+              Активно: {roundingOptions.find(o => o.value === effectiveSetting.roundingType)?.label}
+            </div>
+
+            <div className="sber-card" style={{ padding: '20px' }}>
+              <h3 className={css({ fontSize: "14px", fontWeight: "800", mb: "16px", color: "var(--secondary-text)", textTransform: "uppercase" })}>Добавить правило</h3>
+              <form action={addBankCardSetting} className={stack({ gap: "24px" })}>
+                <input type="hidden" name="bankCardId" value={cardId} />
+                <div className={stack({ gap: "16px" })}>
+                  <div className={stack({ gap: "8px" })}>
+                    <label className="sber-label">ТИП ОКРУГЛЕНИЯ</label>
+                    <SearchableSelect name="roundingType" required options={roundingOptions} />
+                  </div>
+                  <div className={stack({ gap: "8px" })}>
+                    <label className="sber-label">ДЕЙСТВУЕТ С ДАТЫ</label>
+                    <input name="startDate" type="date" required className="sber-input" />
+                  </div>
                 </div>
-                <form action={deleteBankCardSetting.bind(null, s.id, cardId)}>
-                  <button type="submit" className={css({ p: "10px", color: "#ef4444", cursor: "pointer", _hover: { bg: "rgba(239, 68, 68, 0.1)", borderRadius: "full" } })}>
-                    <Trash2 size={18} />
-                  </button>
-                </form>
-              </div>
-            ))}
-            {historicalSettings.length === 0 && (
-              <div className={css({ gridColumn: "1/-1", py: "32px", textAlign: "center", color: "var(--secondary-text)", bg: "var(--card-bg)", borderRadius: "20px", border: "1px dashed", borderColor: "var(--border-color)", fontSize: "15px" })}>
-                Нет исторических правил. Используется округление по умолчанию.
+                <button type="submit" className="sber-button" style={{ backgroundColor: "#6366f1" }}>
+                  Сохранить правило
+                </button>
+              </form>
+            </div>
+
+            {historicalSettings.length > 0 && (
+              <div className="sber-card" style={{ padding: '20px' }}>
+                <h3 className={css({ fontSize: "14px", fontWeight: "800", mb: "16px", color: "var(--secondary-text)", textTransform: "uppercase" })}>История</h3>
+                <div className={stack({ gap: "12px" })}>
+                  {historicalSettings.map(s => (
+                    <div key={s.id} className={flex({ justify: "space-between", align: "center", gap: "8px", pb: "12px", borderBottom: "1px dashed var(--border-color)", _last: { borderBottom: "none", pb: 0 } })}>
+                      <div className={stack({ gap: "2px" })}>
+                        <p className={css({ fontWeight: "700", fontSize: "14px", color: "var(--foreground)" })}>
+                          {roundingOptions.find(o => o.value === s.roundingType)?.label}
+                        </p>
+                        <p className={css({ fontSize: "11px", color: "var(--secondary-text)" })}>
+                          С {s.startDate.split('-').reverse().join('.')}
+                        </p>
+                      </div>
+                      <form action={deleteBankCardSetting.bind(null, s.id, cardId)}>
+                        <button type="submit" className={css({ p: "6px", color: "#ef4444", cursor: "pointer", _hover: { bg: "rgba(239, 68, 68, 0.1)", borderRadius: "8px" } })}>
+                          <Trash2 size={14} />
+                        </button>
+                      </form>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
-          </div>
-        </section>
+          </section>
 
-        <hr className={css({ borderColor: "var(--border-color)" })} />
-
-        <div className={stack({ gap: "32px" })}>
-          <h2 className={css({ fontSize: "24px", fontWeight: "800", color: "var(--foreground)" })}>Категории кешбэка</h2>
-
-          {/* Форма добавления категории */}
-          <section className="sber-card">
-            <div className={flex({ align: "center", gap: "12px", mb: "24px" })}>
-              <div className={css({ p: "8px", bg: "var(--sber-green)", borderRadius: "10px", color: "white" })}>
-                <Plus size={20} />
-              </div>
-              <h3 className={css({ fontSize: "20px", fontWeight: "700", color: "var(--foreground)" })}>Новая категория</h3>
+          {/* Column 3: New Category */}
+          <section className={stack({ gap: "16px" })}>
+            <div className={flex({ align: "center", gap: "12px" })}>
+              <div className={css({ p: "8px", bg: "#eab308", borderRadius: "10px", color: "white" })}><Plus size={20} /></div>
+              <h2 className={css({ fontSize: "20px", fontWeight: "800", color: "var(--foreground)" })}>Новая категория</h2>
             </div>
 
-            <form action={createBankCategory} className={stack({ gap: "24px" })}>
-              <input type="hidden" name="bankCardId" value={cardId} />
-              
-              <div className={stack({ gap: "8px" })}>
-                <label className="sber-label">НАЗВАНИЕ КАТЕГОРИИ</label>
-                <input name="name" type="text" required placeholder="Например, Супермаркеты" className="sber-input" />
-              </div>
-
-              <div className={flex({ gap: "16px", wrap: "wrap" })}>
-                <div className={stack({ gap: "8px", flex: 1, minW: "180px" })}>
-                  <label className="sber-label">Действует С</label>
-                  <input name="startDate" type="date" defaultValue={today} required className="sber-input" />
+            <div className="sber-card" style={{ padding: '20px' }}>
+              <form action={createBankCategory} className={stack({ gap: "20px" })}>
+                <input type="hidden" name="bankCardId" value={cardId} />
+                
+                <div className={stack({ gap: "6px" })}>
+                  <label className="sber-label">НАЗВАНИЕ</label>
+                  <input name="name" type="text" required placeholder="Например, Супермаркеты" className="sber-input" />
                 </div>
-                <div className={stack({ gap: "8px", flex: 1, minW: "180px" })}>
-                  <label className="sber-label">Действует ПО (Архив)</label>
-                  <input name="endDate" type="date" className="sber-input" />
+
+                <div className={flex({ gap: "12px", wrap: "wrap" })}>
+                  <div className={stack({ gap: "6px", flex: 1, minW: "140px" })}>
+                    <label className="sber-label">Действует С</label>
+                    <input name="startDate" type="date" defaultValue={today} required className="sber-input" />
+                  </div>
+                  <div className={stack({ gap: "6px", flex: 1, minW: "140px" })}>
+                    <label className="sber-label">Действует ПО</label>
+                    <input name="endDate" type="date" className="sber-input" />
+                  </div>
                 </div>
-              </div>
-              
-              <div className={stack({ gap: "8px" })}>
-                <label className="sber-label">БАЗОВЫЙ ПРОЦЕНТ (%)</label>
-                <input name="defaultPercentage" type="number" step="0.25" required placeholder="1.5" className="sber-input" />
-              </div>
+                
+                <div className={flex({ gap: "12px", wrap: "wrap" })}>
+                  <div className={stack({ gap: "6px", flex: 1, minW: "140px" })}>
+                    <label className="sber-label">ПРОЦЕНТ (%)</label>
+                    <input name="defaultPercentage" type="number" step="0.25" required placeholder="1.5" className="sber-input" />
+                  </div>
+                  <div className={stack({ gap: "6px", flex: 1, minW: "140px" })}>
+                    <label className="sber-label">ЛИМИТ (₽)</label>
+                    <input name="cashbackLimit" type="number" placeholder="1000" className="sber-input" />
+                  </div>
+                </div>
 
-              <div className={stack({ gap: "8px" })}>
-                <label className="sber-label">ЛИМИТ КЕШБЭКА В МЕСЯЦ (₽)</label>
-                <input name="cashbackLimit" type="number" placeholder="Например, 1000" className="sber-input" />
-              </div>
+                <div className={stack({ gap: "6px" })}>
+                  <label className="sber-label">ОКРУГЛЕНИЕ</label>
+                  <SearchableSelect 
+                    name="roundingType" 
+                    options={[{ value: "inherit", label: "Наследовать" }, ...roundingOptions]} 
+                    defaultValue="inherit"
+                  />
+                </div>
 
-              <div className={stack({ gap: "8px" })}>
-                <label className="sber-label">ОКРУГЛЕНИЕ</label>
-                <SearchableSelect 
-                  name="roundingType" 
-                  options={[{ value: "inherit", label: "Наследовать от карты" }, ...roundingOptions]} 
-                  defaultValue="inherit"
-                />
-              </div>
+                <div className={stack({ gap: "6px" })}>
+                  <label className="sber-label">МЕРЧАНТЫ</label>
+                  <MultiSearchableSelect 
+                    name="merchantIds"
+                    options={merchantOptions}
+                    placeholder="Выберите..."
+                  />
+                </div>
 
-              <div className={stack({ gap: "8px" })}>
-                <label className="sber-label">МЕРЧАНТЫ (ТОЛЬКО ДЛЯ ЭТИХ МАГАЗИНОВ)</label>
-                <MultiSearchableSelect 
-                  name="merchantIds"
-                  options={merchantOptions}
-                  placeholder="Выберите мерчантов (опционально)..."
-                />
-              </div>
+                <div className={stack({ gap: "6px" })}>
+                  <label className="sber-label">MCC-КОДЫ</label>
+                  <textarea 
+                    name="mccText" 
+                    placeholder="5411, 5812..." 
+                    className="sber-input"
+                    style={{ minHeight: "80px" }}
+                  />
+                </div>
 
-              <div className={stack({ gap: "8px" })}>
-                <label className="sber-label">MCC-КОДЫ (ПРОИЗВОЛЬНЫЙ ТЕКСТ)</label>
-                <textarea 
-                  name="mccText" 
-                  placeholder="Вставьте текст с MCC-кодами. Например: 5411, 5812. Коды будут привязаны автоматически." 
-                  className="sber-input"
-                  style={{ minHeight: "100px", paddingTop: "14px" }}
-                />
-              </div>
+                <div className={stack({ gap: "6px" })}>
+                  <label className="sber-label">ТИРЫ КЕШБЭКА</label>
+                  <TiersEditor defaultValue="[]" />
+                </div>
 
-              <div className={stack({ gap: "8px" })}>
-                <label className="sber-label">УРОВНИ (ТИРЫ) КЕШБЭКА ОТ СУММЫ ЧЕКА</label>
-                <TiersEditor defaultValue="[]" />
-              </div>
+                <button type="submit" className="sber-button">
+                  Создать категорию
+                </button>
+              </form>
 
-              <button type="submit" className="sber-button">
-                Создать категорию
-              </button>
-            </form>
-
-            <MccImportFromUrl bankCardId={cardId} />
+              <hr className={css({ borderColor: "var(--border-color)", my: "20px" })} />
+              <MccImportFromUrl bankCardId={cardId} />
+            </div>
           </section>
+        </div>
+
+        <hr className={css({ borderColor: "var(--border-color)", my: "8px" })} />
+
+        <div className={stack({ gap: "24px" })}>
+          <h2 className={css({ fontSize: "24px", fontWeight: "800", color: "var(--foreground)" })}>Существующие категории</h2>
 
           {/* Список существующих категорий */}
           <div className={grid({ columns: { base: 1, md: 2, lg: 3 }, gap: "16px" })}>
@@ -422,27 +433,70 @@ export default async function EditBankCardPage({ params }: { params: Promise<{ i
                       <TiersEditor defaultValue={cat.tiers || "[]"} />
                     </div>
 
-                    {(mccs.length > 0 || catsMerchants.length > 0) && (
-                      <div className={stack({ gap: "8px", mt: "12px", p: "12px", bg: "var(--surface-secondary)", borderRadius: "16px", border: "1px solid", borderColor: "var(--border-color)" })}>
-                        <p className={css({ fontSize: "10px", fontWeight: "800", color: "var(--secondary-text)", textTransform: "uppercase" })}>Состав категории</p>
-                        <div className={wrap({ gap: "6px" })}>
-                          {mccs.map(mcc => (
-                            <span key={mcc} className={css({ px: "8px", py: "3px", bg: "rgba(33, 160, 56, 0.1)", color: "var(--sber-green)", borderRadius: "6px", fontSize: "11px", fontWeight: "700", border: "1px solid", borderColor: "rgba(33, 160, 56, 0.2)" })}>
-                              {mcc}
-                            </span>
-                          ))}
-                          {catsMerchants.map(m => (
-                            <span key={m} className={flex({ align: "center", gap: "4px", px: "8px", py: "3px", bg: "rgba(33, 160, 56, 0.1)", color: "var(--sber-green)", borderRadius: "6px", fontSize: "11px", fontWeight: "700", border: "1px solid", borderColor: "rgba(33, 160, 56, 0.2)" })}>
-                              <Store size={10} /> {m}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
+                    {!isAllPurchases && (
+                      <>
+                        <input type="checkbox" id={`edit-mcc-${cat.id}`} hidden />
+                        <style dangerouslySetInnerHTML={{ __html: `
+                          #edit-mcc-${cat.id}:checked ~ .mcc-wrapper .mcc-display { display: none !important; }
+                          #edit-mcc-${cat.id}:checked ~ .mcc-wrapper .mcc-editor { display: flex !important; }
+                        ` }} />
+                      </>
                     )}
 
-                    {!isSystem && mccs.length === 0 && catsMerchants.length === 0 && (
-                      <div className={css({ mt: "10px", py: "12px", textAlign: "center", border: "1px dashed", borderColor: "var(--border-color)", borderRadius: "12px", fontSize: "12px", color: "var(--secondary-text)", fontWeight: "600" })}>
-                        Состав не настроен
+                    {(mccs.length > 0 || catsMerchants.length > 0 || !isAllPurchases) && (
+                      <div className={`mcc-wrapper ${stack({ gap: "10px", mt: "12px", p: "12px", bg: "var(--surface-secondary)", borderRadius: "16px", border: "1px solid", borderColor: "var(--border-color)" })}`}>
+                        <p className={css({ fontSize: "10px", fontWeight: "800", color: "var(--secondary-text)", textTransform: "uppercase" })}>Состав категории</p>
+                        
+                        <div className={`mcc-display ${stack({ gap: "10px" })}`}>
+                          {mccs.length > 0 ? (
+                            <div className={wrap({ gap: "6px" })}>
+                              {mccs.map(mcc => (
+                                <span key={mcc} className={css({ px: "8px", py: "3px", bg: "rgba(33, 160, 56, 0.1)", color: "var(--sber-green)", borderRadius: "6px", fontSize: "11px", fontWeight: "700", border: "1px solid", borderColor: "rgba(33, 160, 56, 0.2)" })}>
+                                  {mcc}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            !isAllPurchases && (
+                              <div className={css({ fontSize: "12px", color: "var(--secondary-text)" })}>MCC-коды не заданы</div>
+                            )
+                          )}
+                        </div>
+
+                        {!isAllPurchases && (
+                          <div className={`mcc-editor ${stack({ gap: "6px" })}`} style={{ display: 'none' }}>
+                            <label className={css({ fontSize: "10px", fontWeight: "700", color: "var(--secondary-text)", textTransform: "uppercase" })}>Редактирование MCC-кодов</label>
+                            <textarea 
+                              name="mccText" 
+                              defaultValue={mccs.join(", ")}
+                              placeholder="Например: 5411, 5812"
+                              className={css({ 
+                                p: "8px", 
+                                borderRadius: "10px", 
+                                border: "1px solid var(--border-color)", 
+                                fontSize: "13px", 
+                                bg: "var(--input-bg)", 
+                                color: "var(--foreground)",
+                                minHeight: "60px",
+                                fontFamily: "monospace"
+                              })}
+                            />
+                            <p className={css({fontSize: "11px", color: "var(--secondary-text)"})}>Отредактируйте список и нажмите зеленую иконку <Save size={10} style={{display: 'inline'}} /> вверху карточки.</p>
+                          </div>
+                        )}
+
+                        {catsMerchants.length > 0 && (
+                          <div className={stack({ gap: "6px", mt: "4px" })}>
+                            <label className={css({ fontSize: "10px", fontWeight: "700", color: "var(--secondary-text)" })}>МЕРЧАНТЫ</label>
+                            <div className={wrap({ gap: "6px" })}>
+                              {catsMerchants.map(m => (
+                                <span key={m} className={flex({ align: "center", gap: "4px", px: "8px", py: "3px", bg: "rgba(33, 160, 56, 0.1)", color: "var(--sber-green)", borderRadius: "6px", fontSize: "11px", fontWeight: "700", border: "1px solid", borderColor: "rgba(33, 160, 56, 0.2)" })}>
+                                  <Store size={10} /> {m}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
 

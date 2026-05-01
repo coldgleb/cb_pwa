@@ -7,6 +7,8 @@ import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 import { recalculateTransactionsForBankCard } from "./transactions";
 
+export { recalculateTransactionsForBankCard };
+
 export async function createBankCard(formData: FormData) {
 
   const session = await auth();

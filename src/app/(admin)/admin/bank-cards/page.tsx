@@ -1,12 +1,13 @@
 import { db } from "@/db";
 import { banks, bankCards } from "@/db/schema";
-import { createBankCard } from "@/lib/actions/bank-cards";
+import { createBankCard, deleteBankCard } from "@/lib/actions/bank-cards"; // Added deleteBankCard
 import { css } from "../../../../../styled-system/css";
 import { stack, flex, grid } from "../../../../../styled-system/patterns";
 import { eq, asc } from "drizzle-orm";
 import { CreditCard, Plus, ChevronRight, Landmark } from "lucide-react";
 import SearchableSelect from "@/components/SearchableSelect";
 import { getIconUrl } from "@/lib/utils/icons";
+import DeleteBankCardButton from "@/components/admin/DeleteBankCardButton";
 
 export default async function AdminBankCardsPage() {
   const allBanks = await db.select().from(banks).orderBy(asc(banks.name));
@@ -78,20 +79,23 @@ export default async function AdminBankCardsPage() {
           {allBankCards.map(card => {
             const bankIcon = getIconUrl({ logo: card.bankLogo, website: card.bankWebsite, name: card.bankName || "" });
             return (
-              <a key={card.id} href={`/admin/bank-cards/${card.id}`} className="sber-card" style={{ padding: '16px', display: 'flex', alignItems: 'center', gap: '16px' }}>
-                <div className={css({ w: "48px", h: "48px", bg: "#f8fafc", borderRadius: "12px", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid", borderColor: "#f1f5f9", overflow: "hidden", flexShrink: 0 })}>
-                  {bankIcon ? (
-                    <img src={bankIcon} alt={card.bankName || ""} className={css({ w: "full", h: "full", objectFit: "contain", p: "4px" })} />
-                  ) : (
-                    <Landmark size={20} color="#94a3b8" />
-                  )}
-                </div>
-                <div className={stack({ gap: "0", flex: "1", overflow: "hidden" })}>
-                  <p className={css({ fontWeight: "700", fontSize: "15px", color: "var(--foreground)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" })} title={card.name}>{card.name}</p>
-                  <p className={css({ fontSize: "12px", color: "secondaryText", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" })} title={card.bankName || ""}>{card.bankName}</p>
-                </div>
-                <ChevronRight size={18} color="#C7C7CC" className={css({ flexShrink: 0 })} />
-              </a>
+              <div key={card.id} className={flex({ gap: "8px", align: "stretch" })}>
+                <a href={`/admin/bank-cards/${card.id}`} className="sber-card" style={{ padding: '16px', display: 'flex', alignItems: 'center', gap: '16px', flex: 1 }}>
+                  <div className={css({ w: "48px", h: "48px", bg: "#f8fafc", borderRadius: "12px", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid", borderColor: "#f1f5f9", overflow: "hidden", flexShrink: 0 })}>
+                    {bankIcon ? (
+                      <img src={bankIcon} alt={card.bankName || ""} className={css({ w: "full", h: "full", objectFit: "contain", p: "4px" })} />
+                    ) : (
+                      <Landmark size={20} color="#94a3b8" />
+                    )}
+                  </div>
+                  <div className={stack({ gap: "0", flex: "1", overflow: "hidden" })}>
+                    <p className={css({ fontWeight: "700", fontSize: "15px", color: "var(--foreground)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" })} title={card.name}>{card.name}</p>
+                    <p className={css({ fontSize: "12px", color: "secondaryText", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" })} title={card.bankName || ""}>{card.bankName}</p>
+                  </div>
+                  <ChevronRight size={18} color="#C7C7CC" className={css({ flexShrink: 0 })} />
+                </a>
+                <DeleteBankCardButton cardId={card.id} />
+              </div>
             );
           })}
           {allBankCards.length === 0 && (
