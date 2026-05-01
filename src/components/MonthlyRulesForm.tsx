@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useTransition } from "react";
 import { css } from "../../styled-system/css";
 import { stack, flex } from "../../styled-system/patterns";
-import { Star, Copy, Save, Loader2 } from "lucide-react";
+import { Star, Copy, Save, Loader2, Plus, Trash2 } from "lucide-react";
 import { saveMonthlyRules, copyRulesFromPreviousMonth } from "@/lib/actions/rules";
 import { useRouter, usePathname } from "next/navigation";
+import SearchableSelect from "./SearchableSelect";
+import { useToast } from "./Toast";
 
 interface Card {
   id: number;
@@ -37,6 +39,13 @@ interface MonthlyRulesFormProps {
   activeRules: ActiveRule[];
 }
 
+interface FormRow {
+  id: string;
+  categoryId: number | null;
+  percentage: number | string;
+  limit: number | string;
+}
+
 export default function MonthlyRulesForm({ 
   userCards, 
   allCategories, 
@@ -45,12 +54,14 @@ export default function MonthlyRulesForm({
 }: MonthlyRulesFormProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const { toast } = useToast();
+  const [isPending, startTransition] = useTransition();
   
   const [selectedMonth, setSelectedMonth] = useState(initialMonth);
   const [isCopying, setIsCopying] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  const selectedCard = userCards[0]; // In this context we always have at least one card
+  const selectedCard = userCards[0];
   
   const cardCategories = useMemo(() => {
     if (!selectedCard || !selectedMonth) return [];
@@ -67,7 +78,6 @@ export default function MonthlyRulesForm({
         (!cat.endDate || cat.endDate >= monthStart)
       )
       .sort((a, b) => {
-        // Special Sort: 1. Без кешбэка, 2. Остальные покупки, 3. Alphabetical
         if (a.name === "Без кешбэка") return -1;
         if (b.name === "Без кешбэка") return 1;
         if (a.name === "Остальные покупки") return -1;
@@ -75,24 +85,106 @@ export default function MonthlyRulesForm({
         return a.name.localeCompare(b.name, 'ru');
       });
   }, [selectedCard, allCategories, selectedMonth]);
+
+  const selectOptions = useMemo(() => 
+    cardCategories
+      .filter(c => c.name !== "Без кешбэка")
+      .map(c => ({ label: c.name, value: String(c.id) })),
+    [cardCategories]
+  );
   
-  // Initialize active categories from server-side activeRules
-  const initialActiveSet = useMemo(() => {
-    const set = new Set(activeRules.map(r => r.categoryId));
-    // Always include "Без кешбэка" if it exists in the card's categories for this month
+  const [rows, setRows] = useState<FormRow[]>(() => {
+    const initialRows: FormRow[] = activeRules.map((r, idx) => ({
+      id: `saved-${idx}`,
+      categoryId: r.categoryId,
+      percentage: r.percentage,
+      limit: r.cashbackLimit ?? ""
+    }));
+
+    // Check for "Без кешбэка" in the initial available categories
+    const [year, month] = initialMonth.split("-").map(Number);
+    const monthStart = `${initialMonth}-01`;
+    const lastDay = new Date(year, month, 0).getDate();
+    const monthEnd = `${initialMonth}-${String(lastDay).padStart(2, "0")}`;
+
+    const initialCardCategories = allCategories.filter(cat => 
+      cat.bankCardId === selectedCard.bankCardId &&
+      cat.startDate <= monthEnd &&
+      (!cat.endDate || cat.endDate >= monthStart)
+    );
+
+    const noCashbackCat = initialCardCategories.find(c => c.name === "Без кешбэка");
+    if (noCashbackCat && !initialRows.find(r => r.categoryId === noCashbackCat.id)) {
+      initialRows.unshift({
+        id: "no-cashback",
+        categoryId: noCashbackCat.id,
+        percentage: 0,
+        limit: ""
+      });
+    }
+    return initialRows;
+  });
+
+  // Sync rows with activeRules when they change (e.g. after copying)
+  useEffect(() => {
+    const updatedRows: FormRow[] = activeRules.map((r, idx) => ({
+      id: `synced-${idx}-${Date.now()}`,
+      categoryId: r.categoryId,
+      percentage: r.percentage,
+      limit: r.cashbackLimit ?? ""
+    }));
+
+    // Always ensure "Без кешбэка" is present
     const noCashbackCat = cardCategories.find(c => c.name === "Без кешбэка");
-    if (noCashbackCat) set.add(noCashbackCat.id);
-    return set;
+    if (noCashbackCat && !updatedRows.find(r => r.categoryId === noCashbackCat.id)) {
+      updatedRows.unshift({
+        id: "no-cashback-synced",
+        categoryId: noCashbackCat.id,
+        percentage: 0,
+        limit: ""
+      });
+    }
+
+    setRows(updatedRows);
   }, [activeRules, cardCategories]);
 
-  const [activeCats, setActiveCats] = useState<Set<number>>(initialActiveSet);
+  const duplicateIds = useMemo(() => {
+    const ids = rows.map(r => r.categoryId).filter(id => id !== null);
+    const seen = new Set<number>();
+    const duplicates = new Set<number>();
+    for (const id of ids) {
+      if (seen.has(id!)) duplicates.add(id!);
+      seen.add(id!);
+    }
+    return duplicates;
+  }, [rows]);
 
-  const toggleCat = (id: number, name: string) => {
-    if (name === "Без кешбэка" || isSaving || isCopying) return; // Cannot toggle this
-    const newSet = new Set(activeCats);
-    if (newSet.has(id)) newSet.delete(id);
-    else newSet.add(id);
-    setActiveCats(newSet);
+  const hasDuplicates = duplicateIds.size > 0;
+
+  const addRow = () => {
+    setRows([...rows, { id: Math.random().toString(36).substr(2, 9), categoryId: null, percentage: "", limit: "" }]);
+  };
+
+  const removeRow = (id: string) => {
+    setRows(rows.filter(r => r.id !== id));
+  };
+
+  const updateRow = (id: string, updates: Partial<FormRow>) => {
+    setRows(rows.map(r => {
+      if (r.id !== id) return r;
+      const updated = { ...r, ...updates };
+      
+      // Auto-fill percentage when category changes
+      if (updates.categoryId !== undefined && updates.categoryId !== null) {
+        const cat = cardCategories.find(c => c.id === updates.categoryId);
+        if (cat) {
+          updated.percentage = cat.defaultPercentage;
+          updated.limit = cat.cashbackLimit ?? "";
+        }
+      }
+      
+      return updated;
+    }));
   };
 
   const handleMonthChange = (newMonth: string) => {
@@ -106,18 +198,34 @@ export default function MonthlyRulesForm({
     setIsCopying(true);
     try {
       await copyRulesFromPreviousMonth(selectedCard.id, selectedMonth);
+      toast("Правила успешно скопированы", "success");
     } catch (e) {
-      alert("Не удалось скопировать: " + (e as Error).message);
+      toast("Не удалось скопировать: " + (e as Error).message, "error");
     } finally {
       setIsCopying(false);
     }
   };
 
-  const isPending = isSaving || isCopying;
+  const isFormDisabled = isSaving || isCopying || isPending;
+
+  async function action(formData: FormData) {
+    setIsSaving(true);
+    startTransition(async () => {
+      try {
+        await saveMonthlyRules(formData);
+        toast("Правила успешно сохранены", "success");
+        router.refresh();
+      } catch (error) {
+        toast(error instanceof Error ? error.message : "Произошла ошибка", "error");
+      } finally {
+        setIsSaving(false);
+      }
+    });
+  }
 
   return (
     <section className="sber-card" style={{ position: "relative" }}>
-      {isPending && (
+      {isFormDisabled && (
         <div className={css({
           position: "absolute",
           top: 0,
@@ -143,23 +251,16 @@ export default function MonthlyRulesForm({
         <div className={css({ p: "6px", bg: "#f59e0b", borderRadius: "8px", color: "white" })}>
           <Star size={18} />
         </div>
-        <h2 className={css({ fontSize: "17px", fontWeight: "700", color: "#000" })}>Настройка на месяц</h2>
+        <h2 className={css({ fontSize: "17px", fontWeight: "700", color: "var(--foreground)" })}>Настройка на месяц</h2>
       </div>
 
-      <form action={async (formData) => {
-        setIsSaving(true);
-        try {
-          await saveMonthlyRules(formData);
-        } finally {
-          setIsSaving(false);
-        }
-      }} className={stack({ gap: "24px" })}>
+      <form action={action} className={stack({ gap: "24px" })}>
         <div className={flex({ gap: "12px" })}>
           <div className={stack({ gap: "6px", flex: 1 })}>
             <label className="sber-label">КАРТА</label>
-            <div className={css({ px: "16px", py: "14px", bg: "#f1f5f9", borderRadius: "14px", border: "1px solid #e2e8f0" })}>
+            <div className={css({ px: "16px", py: "14px", bg: "var(--input-bg)", borderRadius: "14px", border: "1px solid var(--border-color)" })}>
               <input type="hidden" name="userCardId" value={selectedCard.id} />
-              <p className={css({ fontSize: "15px", fontWeight: "700", color: "#000" })}>
+              <p className={css({ fontSize: "15px", fontWeight: "700", color: "var(--foreground)" })}>
                 {selectedCard.bankName} — {selectedCard.name}
               </p>
             </div>
@@ -171,7 +272,7 @@ export default function MonthlyRulesForm({
               name="month" 
               required 
               value={selectedMonth}
-              disabled={isPending}
+              disabled={isFormDisabled}
               onChange={(e) => handleMonthChange(e.target.value)}
               className="sber-input"
               style={{ fontSize: "14px" }}
@@ -181,12 +282,12 @@ export default function MonthlyRulesForm({
 
         <div className={stack({ gap: "16px" })}>
           <div className={flex({ justify: "space-between", align: "center", wrap: "wrap", gap: "12px" })}>
-            <p className={css({ fontSize: "13px", fontWeight: "800", color: "secondaryText", textTransform: "uppercase" })}>Выберите категории</p>
+            <p className={css({ fontSize: "13px", fontWeight: "800", color: "var(--secondary-text)", textTransform: "uppercase" })}>Категории кешбэка</p>
             <button 
               type="button" 
               onClick={handleCopy}
-              disabled={isPending}
-              className={flex({ align: "center", gap: "6px", color: "sberGreen", fontSize: "12px", fontWeight: "700", cursor: "pointer", _disabled: { opacity: 0.5 } })}
+              disabled={isFormDisabled}
+              className={flex({ align: "center", gap: "6px", color: "var(--sber-green)", fontSize: "12px", fontWeight: "700", cursor: "pointer", _disabled: { opacity: 0.5 } })}
             >
               {isCopying ? <Loader2 size={14} className={css({ animation: "spin 1s linear infinite" })} /> : <Copy size={14} />}
               СКОПИРОВАТЬ ИЗ ПРОШЛОГО МЕСЯЦА
@@ -194,75 +295,186 @@ export default function MonthlyRulesForm({
           </div>
 
           <div className={stack({ gap: "10px" })}>
-            {cardCategories.map(cat => {
-              const isNoCashback = cat.name === "Без кешбэка";
-              const isActive = isNoCashback || activeCats.has(cat.id);
-              const savedRule = activeRules.find(r => r.categoryId === cat.id);
+            {rows.map((row, index) => {
+              const selectedCat = cardCategories.find(c => c.id === row.categoryId);
+              const isNoCashback = selectedCat?.name === "Без кешбэка";
+              const isDuplicate = row.categoryId !== null && duplicateIds.has(row.categoryId);
 
               return (
-                <div key={cat.id} className={flex({ justify: "space-between", align: "center", p: "12px", bg: isActive ? (isNoCashback ? "#f8fafc" : "#f0fdf4") : "#f8fafc", borderRadius: "14px", border: "1px solid", borderColor: isActive && !isNoCashback ? "sberGreen" : "transparent", transition: "all 0.2s" })}>
-                  <label className={flex({ align: "center", gap: "12px", cursor: isNoCashback || isPending ? "default" : "pointer", flex: 1 })}>
-                    <input 
-                      type="checkbox" 
-                      checked={isActive}
-                      disabled={isNoCashback || isPending}
-                      onChange={() => toggleCat(cat.id, cat.name)}
-                      className={css({ w: "20px", h: "20px", accentColor: "#21a038", cursor: isNoCashback || isPending ? "default" : "pointer", opacity: isNoCashback || isPending ? 0.5 : 1 })}
-                    />
-                    <div className={stack({ gap: "2px" })}>
-                      <span className={css({ fontSize: "15px", fontWeight: isActive ? "700" : "500", color: isNoCashback ? "secondaryText" : "#000" })}>
-                        {cat.name}
-                      </span>
-                    </div>
-                  </label>
-                  
-                  <div className={flex({ align: "center", gap: "12px" })}>
-                    {/* Limit Field */}
-                    {!isNoCashback && isActive && (
-                      <div className={flex({ align: "center", gap: "4px" })}>
-                        <span className={css({ fontSize: "9px", fontWeight: "800", color: "secondaryText" })}>ЛИМИТ</span>
-                        <input 
-                          name={`limit_${cat.id}`}
-                          type="number"
-                          disabled={isPending}
-                          defaultValue={savedRule?.cashbackLimit ?? cat.cashbackLimit ?? ""}
-                          placeholder="0"
-                          className={css({ w: "60px", p: "6px", borderRadius: "8px", border: "1px solid #e2e8f0", textAlign: "right", fontSize: "13px", fontWeight: "700", bg: "white", _disabled: { bg: "#f1f5f9" } })}
+                <div 
+                  key={row.id} 
+                  className={css({ 
+                    display: "grid", 
+                    gridTemplateColumns: "1fr 40px", 
+                    gap: "8px", 
+                    w: "full", 
+                    alignItems: "center" 
+                  })}
+                  style={{ zIndex: rows.length - index, position: "relative" }}
+                >
+                  <div className={css({ 
+                    display: "grid",
+                    gridTemplateColumns: { base: "1fr 85px", sm: "1fr 155px" },
+                    alignItems: "center",
+                    gap: "12px",
+                    p: "10px 12px", 
+                    bg: isNoCashback ? "var(--input-bg)" : (isDuplicate ? "rgba(239, 68, 68, 0.1)" : "rgba(33, 160, 56, 0.1)"), 
+                    borderRadius: "14px", 
+                    border: "1px solid", 
+                    borderColor: isNoCashback ? "var(--border-color)" : (isDuplicate ? "#ef4444" : "var(--sber-green)"),
+                    transition: "all 0.2s",
+                    minH: "64px",
+                    position: "relative",
+                    w: "full",
+                    boxSizing: "border-box"
+                  })}>
+                    <div className={css({ minW: 0 })}>
+                      {isNoCashback ? (
+                        <div className={css({ px: "14px", py: "12px", bg: "var(--input-bg)", borderRadius: "14px", border: "1px solid var(--border-color)" })}>
+                          <p className={css({ fontSize: "14px", fontWeight: "700", color: "var(--secondary-text)" })}>Без кешбэка</p>
+                          <input type="hidden" name={`cat_${row.categoryId}`} value="0" />
+                        </div>
+                      ) : (
+                        <SearchableSelect
+                          name={`temp_cat_id_${row.id}`}
+                          placeholder="Категория..."
+                          options={selectOptions}
+                          value={row.categoryId ? String(row.categoryId) : ""}
+                          disabled={isFormDisabled}
+                          onChange={(val) => updateRow(row.id, { categoryId: parseInt(val) })}
                         />
-                      </div>
-                    )}
-
-                    <div className={flex({ align: "center", gap: "6px", opacity: isActive ? 1 : 0.4, transition: "opacity 0.2s" })}>
-                      {isNoCashback && isActive && (
-                        <input type="hidden" name={`cat_${cat.id}`} value="0" />
                       )}
-                      <input 
-                        name={isNoCashback ? undefined : `cat_${cat.id}`} 
-                        type="number" 
-                        step="0.25" 
-                        defaultValue={savedRule ? savedRule.percentage : cat.defaultPercentage}
-                        disabled={!isActive || isNoCashback || isPending}
-                        className={css({ w: "60px", p: "8px", borderRadius: "10px", border: "1px solid #e2e8f0", textAlign: "right", fontWeight: "800", fontSize: "15px", bg: isActive && !isNoCashback && !isPending ? "white" : "#f1f5f9", outline: "none", color: "#000" })}
-                      />
-                      <span className={css({ fontSize: "14px", fontWeight: "800", color: isActive && !isNoCashback ? "sberGreen" : "secondaryText" })}>%</span>
+                      
+                      {/* Hidden inputs for existing backend compatibility */}
+                      {!isNoCashback && row.categoryId && (
+                        <>
+                          <input type="hidden" name={`cat_${row.categoryId}`} value={row.percentage} />
+                          <input type="hidden" name={`limit_${row.categoryId}`} value={row.limit} />
+                        </>
+                      )}
+                    </div>
+                    
+                    <div className={flex({ 
+                      align: "center", 
+                      gap: { base: "8px", sm: "12px" }, 
+                      flexShrink: 0, 
+                      w: { base: "75px", sm: "155px" }, 
+                      justify: "flex-end" 
+                    })}>
+                      {/* Limit Field */}
+                      {!isNoCashback && row.categoryId && (
+                        <div className={flex({ align: "center", gap: "4px" })}>
+                          <span className={css({ fontSize: "8px", fontWeight: "700", color: "var(--secondary-text)", display: { base: "none", sm: "block" }, opacity: 0.8 })}>ЛИМИТ</span>
+                          <input 
+                            type="number"
+                            disabled={isFormDisabled}
+                            value={row.limit}
+                            onChange={(e) => updateRow(row.id, { limit: e.target.value })}
+                            placeholder="0"
+                            className={css({ w: "55px", p: "6px", borderRadius: "8px", border: "1px solid var(--border-color)", textAlign: "right", fontSize: "13px", fontWeight: "700", bg: "var(--input-bg)", color: "var(--foreground)", _disabled: { bg: "var(--background)", opacity: 0.6 } })}
+                          />
+                        </div>
+                      )}
+
+                      <div className={flex({ align: "center", gap: "4px" })}>
+                        <input 
+                          type="number" 
+                          step="0.25" 
+                          value={row.percentage}
+                          onChange={(e) => updateRow(row.id, { percentage: e.target.value })}
+                          disabled={isNoCashback || !row.categoryId || isFormDisabled}
+                          className={css({ w: "45px", p: "8px", borderRadius: "10px", border: "1px solid var(--border-color)", textAlign: "right", fontWeight: "800", fontSize: "15px", bg: !isNoCashback && row.categoryId && !isFormDisabled ? "var(--input-bg)" : "var(--background)", outline: "none", color: "var(--foreground)", _disabled: { opacity: 0.6 } })}
+                        />
+                        <span className={css({ fontSize: "14px", fontWeight: "800", color: !isNoCashback && row.categoryId ? (isDuplicate ? "#ef4444" : "var(--sber-green)") : "var(--secondary-text)" })}>%</span>
+                      </div>
                     </div>
                   </div>
+                  
+                  {!isNoCashback ? (
+                    <button 
+                      type="button"
+                      disabled={isFormDisabled}
+                      onClick={() => removeRow(row.id)}
+                      className={css({ 
+                        w: "40px",
+                        h: "40px",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        color: "#ef4444", 
+                        bg: "rgba(239, 68, 68, 0.1)", 
+                        borderRadius: "12px", 
+                        cursor: "pointer", 
+                        transition: "all 0.2s", 
+                        _hover: { bg: "rgba(239, 68, 68, 0.2)" }, 
+                        _active: { transform: "scale(0.95)" }, 
+                        border: "none",
+                        outline: "none",
+                        p: 0,
+                        _disabled: { opacity: 0.5, cursor: "not-allowed" } 
+                      })}
+                    >
+                      <Trash2 size={20} />
+                    </button>
+                  ) : (
+                    <div className={css({ w: "40px", h: "40px" })} />
+                  )}
                 </div>
               );
             })}
-            {cardCategories.length === 0 && (
-              <p className={css({ fontSize: "13px", color: "secondaryText", textAlign: "center", py: "20px" })}>
-                Для этой карты нет доступных категорий в справочнике
+
+            <button
+              type="button"
+              onClick={addRow}
+              disabled={isFormDisabled}
+              className={flex({ 
+                align: "center", 
+                justify: "center", 
+                gap: "8px", 
+                w: "full", 
+                p: "14px", 
+                border: "2px dashed var(--border-color)", 
+                borderRadius: "14px", 
+                color: "var(--secondary-text)", 
+                fontSize: "14px", 
+                fontWeight: "700", 
+                cursor: "pointer", 
+                transition: "all 0.2s",
+                _hover: { bg: "var(--input-bg)", borderColor: "var(--sber-green)", color: "var(--foreground)" },
+                _active: { bg: "var(--background)" },
+                _disabled: { opacity: 0.5, cursor: "not-allowed" }
+              })}
+            >
+              <Plus size={18} />
+              ДОБАВИТЬ КАТЕГОРИЮ
+            </button>
+
+            {rows.length === 0 && (
+              <p className={css({ fontSize: "13px", color: "var(--secondary-text)", textAlign: "center", py: "20px" })}>
+                Нажмите &quot;+&quot;, чтобы добавить категорию
               </p>
             )}
+
           </div>
         </div>
 
-        <button type="submit" disabled={activeCats.size === 0 || isPending} className="sber-button" style={{ opacity: activeCats.size === 0 || isPending ? 0.5 : 1 }}>
+        {hasDuplicates && (
+          <p className={css({ color: "#ef4444", fontSize: "13px", fontWeight: "700", textAlign: "center" })}>
+            У вас есть дублирующиеся категории! Удалите повторы для сохранения.
+          </p>
+        )}
+
+        <button 
+          type="submit" 
+          disabled={rows.filter(r => r.categoryId).length === 0 || isFormDisabled || hasDuplicates} 
+          className="sber-button" 
+          style={{ opacity: rows.filter(r => r.categoryId).length === 0 || isFormDisabled || hasDuplicates ? 0.5 : 1 }}
+        >
           {isSaving ? <Loader2 size={18} className={css({ animation: "spin 1s linear infinite" })} /> : <Save size={18} />}
-          {isSaving ? "Сохраняем..." : `Сохранить ${activeCats.size > 0 ? `(${activeCats.size})` : ""}`}
+          {isSaving ? "Сохраняем..." : `Сохранить (${rows.filter(r => r.categoryId).length})`}
         </button>
       </form>
     </section>
   );
 }
+

@@ -8,6 +8,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, Trash2, Plus, Store } from "lucide-react";
 import SearchableSelect from "@/components/SearchableSelect";
 import CopyMccsButton from "@/components/admin/CopyMccsButton";
+import MccImportFromUrl from "@/components/admin/MccImportFromUrl";
 
 export default async function CategoryCompositionPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -80,138 +81,140 @@ export default async function CategoryCompositionPage({ params }: { params: Prom
   const merchantOptions = availableMerchants.map(m => ({ value: m.id.toString(), label: m.name }));
 
   return (
-    <div className={css({ minH: "100vh", bg: "#f4f4f4" })}>
-      <div className="sber-container">
-        <header className={stack({ gap: "4px", mb: "32px" })}>
-          <a href={`/admin/bank-cards/${category.bankCardId}`} className="sber-icon-button">
-            <ArrowLeft size={20} />
-          </a>
-          <h1 className={css({ fontSize: "24px", fontWeight: "800", color: "#000" })}>Состав "{category.name}"</h1>
-          <p className={css({ fontSize: "14px", color: "secondaryText", fontWeight: "600" })}>{category.bankName} • {category.cardName}</p>
-        </header>
+    <div className={stack({ gap: "32px" })}>
+      <header className={flex({ align: "center", gap: "16px", mb: "8px" })}>
+        <a href={`/admin/bank-cards/${category.bankCardId}`} className="sber-icon-button">
+          <ArrowLeft size={20} />
+        </a>
+        <div className={stack({ gap: "4px" })}>
+          <h1 className={css({ fontSize: "24px", fontWeight: "800", color: "var(--foreground)" })}>Состав "{category.name}"</h1>
+          <p className={css({ fontSize: "14px", color: "var(--secondary-text)", fontWeight: "600" })}>{category.bankName} • {category.cardName}</p>
+        </div>
+      </header>
 
-        <div className={stack({ gap: "40px" })}>
+      <div className={stack({ gap: "40px" })}>
+        
+        {/* Блок МСС */}
+        <section className={stack({ gap: "16px" })}>
+          <div className={flex({ align: "center", justify: "space-between" })}>
+            <h2 className="sber-label">ПРИВЯЗАННЫЕ MCC-КОДЫ</h2>
+            <CopyMccsButton mccs={linkedMcc.map(m => m.code).join(", ")} />
+          </div>
           
-          {/* Блок МСС */}
-          <section className={stack({ gap: "16px" })}>
-            <div className={flex({ align: "center", justify: "space-between" })}>
-              <h2 className="sber-label">ПРИВЯЗАННЫЕ MCC-КОДЫ</h2>
-              <CopyMccsButton mccs={linkedMcc.map(m => m.code).join(", ")} />
-            </div>
-            
-            <div className="sber-card" style={{ padding: "16px" }}>
-              <form action={async (formData) => {
-                "use server";
-                const code = formData.get("mccCode") as string;
-                if (code) await linkMccToCategory(categoryId, code);
+          <div className="sber-card" style={{ padding: "16px" }}>
+            <form action={async (formData) => {
+              "use server";
+              const code = formData.get("mccCode") as string;
+              if (code) await linkMccToCategory(categoryId, code);
 
-                const mccText = formData.get("mccText") as string;
-                if (mccText) await linkMultipleMccToCategory(categoryId, mccText);
-              }} className={stack({ gap: "16px", mb: "24px" })}>
-                <div className={stack({ gap: "12px" })}>
-                  <div className={flex({ gap: "8px", align: "end" })}>
-                    <div className={stack({ gap: "4px", flex: 1 })}>
-                      <label className={css({ fontSize: "10px", fontWeight: "800", color: "secondaryText", textTransform: "uppercase" })}>Добавить код (выбор из списка)</label>
-                      <SearchableSelect 
-                        name="mccCode"
-                        options={mccOptions}
-                        placeholder="Выберите MCC..."
-                      />
-                    </div>
-                  </div>
-
-                  <div className={stack({ gap: "4px" })}>
-                    <label className={css({ fontSize: "10px", fontWeight: "800", color: "secondaryText", textTransform: "uppercase" })}>Или вставьте список кодов (текстом)</label>
-                    <textarea 
-                      name="mccText"
-                      placeholder="Например: 5411, 5812. Любой текст с 4-значными кодами будет распознан автоматически."
-                      className="sber-input"
-                      style={{ minHeight: "60px", paddingTop: "8px", fontSize: "13px" }}
-                    />
-                  </div>
-                  
-                  <button type="submit" className="sber-button">
-                    <Plus size={18} style={{ marginRight: "8px" }} /> ДОБАВИТЬ MCC
-                  </button>
-                </div>
-              </form>
-
-              <div className={stack({ gap: "8px" })}>
-                {linkedMcc.length === 0 ? (
-                  <div className={css({ p: "24px", textAlign: "center", bg: "#f8fafc", borderRadius: "16px", color: "secondaryText", fontSize: "13px" })}>
-                    MCC-коды не привязаны
-                  </div>
-                ) : (
-                  linkedMcc.map(mcc => (
-                    <div key={mcc.code} className={flex({ align: "center", justify: "space-between", p: "12px", bg: "#f8fafc", borderRadius: "14px" })}>
-                      <div className={flex({ align: "center", gap: "12px" })}>
-                        <div className={css({ fontWeight: "800", color: "sberGreen", fontSize: "14px", fontVariantNumeric: "tabular-nums" })}>{mcc.code}</div>
-                        <span className={css({ fontSize: "13px", color: "#000", fontWeight: "600" })}>{mcc.description}</span>
-                      </div>
-                      <form action={unlinkMccFromCategory.bind(null, categoryId, mcc.code)}>
-                        <button className={css({ p: "8px", color: "#ef4444", cursor: "pointer", _hover: { bg: "#fef2f2", borderRadius: "full" } })}>
-                          <Trash2 size={16} />
-                        </button>
-                      </form>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          </section>
-
-          {/* Блок Мерчантов */}
-          <section className={stack({ gap: "16px" })}>
-            <div className={flex({ align: "center", justify: "space-between" })}>
-              <h2 className="sber-label">ПРИВЯЗАННЫЕ МЕРЧАНТЫ (МАГАЗИНЫ)</h2>
-            </div>
-            
-            <div className="sber-card" style={{ padding: "16px" }}>
-              <form action={async (formData) => {
-                "use server";
-                const merchantId = parseInt(formData.get("merchantId") as string);
-                if (!isNaN(merchantId)) await linkMerchantToCategory(categoryId, merchantId);
-              }} className={stack({ gap: "12px", mb: "16px" })}>
+              const mccText = formData.get("mccText") as string;
+              if (mccText) await linkMultipleMccToCategory(categoryId, mccText);
+            }} className={stack({ gap: "16px", mb: "24px" })}>
+              <div className={stack({ gap: "12px" })}>
                 <div className={flex({ gap: "8px", align: "end" })}>
                   <div className={stack({ gap: "4px", flex: 1 })}>
-                    <label className={css({ fontSize: "10px", fontWeight: "800", color: "secondaryText", textTransform: "uppercase" })}>Добавить магазин</label>
+                    <label className={css({ fontSize: "10px", fontWeight: "800", color: "var(--secondary-text)", textTransform: "uppercase" })}>Добавить код (выбор из списка)</label>
                     <SearchableSelect 
-                      name="merchantId"
-                      options={merchantOptions}
-                      placeholder="Выберите мерчанта..."
+                      name="mccCode"
+                      options={mccOptions}
+                      placeholder="Выберите MCC..."
                     />
                   </div>
-                  <button type="submit" className="sber-button" style={{ width: "auto", padding: "12px 16px" }}>
-                    <Plus size={18} />
-                  </button>
                 </div>
-              </form>
 
-              <div className={stack({ gap: "8px" })}>
-                {linkedMerchants.length === 0 ? (
-                  <div className={css({ p: "24px", textAlign: "center", bg: "#f8fafc", borderRadius: "16px", color: "secondaryText", fontSize: "13px" })}>
-                    Отдельные магазины не привязаны
-                  </div>
-                ) : (
-                  linkedMerchants.map(merchant => (
-                    <div key={merchant.id} className={flex({ align: "center", justify: "space-between", p: "12px", bg: "#f8fafc", borderRadius: "14px" })}>
-                      <div className={flex({ align: "center", gap: "12px" })}>
-                        <Store size={18} className={css({ color: "sberGreen" })} />
-                        <span className={css({ fontSize: "14px", color: "#000", fontWeight: "700" })}>{merchant.name}</span>
-                      </div>
-                      <form action={unlinkMerchantFromCategory.bind(null, categoryId, merchant.id)}>
-                        <button className={css({ p: "8px", color: "#ef4444", cursor: "pointer", _hover: { bg: "#fef2f2", borderRadius: "full" } })}>
-                          <Trash2 size={16} />
-                        </button>
-                      </form>
-                    </div>
-                  ))
-                )}
+                <div className={stack({ gap: "4px" })}>
+                  <label className={css({ fontSize: "10px", fontWeight: "800", color: "var(--secondary-text)", textTransform: "uppercase" })}>Или вставьте список кодов (текстом)</label>
+                  <textarea 
+                    name="mccText"
+                    placeholder="Например: 5411, 5812. Любой текст с 4-значными кодами будет распознан автоматически."
+                    className="sber-input"
+                    style={{ minHeight: "60px", paddingTop: "8px", fontSize: "13px" }}
+                  />
+                </div>
+                
+                <button type="submit" className="sber-button">
+                  <Plus size={18} style={{ marginRight: "8px" }} /> ДОБАВИТЬ MCC
+                </button>
               </div>
-            </div>
-          </section>
+            </form>
 
-        </div>
+            <MccImportFromUrl categoryId={categoryId} />
+
+            <div className={stack({ gap: "8px" })}>
+              {linkedMcc.length === 0 ? (
+                <div className={css({ p: "24px", textAlign: "center", bg: "var(--surface-secondary)", borderRadius: "16px", color: "var(--secondary-text)", fontSize: "13px" })}>
+                  MCC-коды не привязаны
+                </div>
+              ) : (
+                linkedMcc.map(mcc => (
+                  <div key={mcc.code} className={flex({ align: "center", justify: "space-between", p: "12px", bg: "var(--surface-secondary)", borderRadius: "14px" })}>
+                    <div className={flex({ align: "center", gap: "12px" })}>
+                      <div className={css({ fontWeight: "800", color: "var(--sber-green)", fontSize: "14px", fontVariantNumeric: "tabular-nums" })}>{mcc.code}</div>
+                      <span className={css({ fontSize: "13px", color: "var(--foreground)", fontWeight: "600" })}>{mcc.description}</span>
+                    </div>
+                    <form action={unlinkMccFromCategory.bind(null, categoryId, mcc.code)}>
+                      <button className={css({ p: "8px", color: "#ef4444", cursor: "pointer", _hover: { bg: "rgba(239, 68, 68, 0.1)", borderRadius: "full" } })}>
+                        <Trash2 size={16} />
+                      </button>
+                    </form>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </section>
+
+        {/* Блок Мерчантов */}
+        <section className={stack({ gap: "16px" })}>
+          <div className={flex({ align: "center", justify: "space-between" })}>
+            <h2 className="sber-label">ПРИВЯЗАННЫЕ МЕРЧАНТЫ (МАГАЗИНЫ)</h2>
+          </div>
+          
+          <div className="sber-card" style={{ padding: "16px" }}>
+            <form action={async (formData) => {
+              "use server";
+              const merchantId = parseInt(formData.get("merchantId") as string);
+              if (!isNaN(merchantId)) await linkMerchantToCategory(categoryId, merchantId);
+            }} className={stack({ gap: "12px", mb: "16px" })}>
+              <div className={flex({ gap: "8px", align: "end" })}>
+                <div className={stack({ gap: "4px", flex: 1 })}>
+                  <label className={css({ fontSize: "10px", fontWeight: "800", color: "var(--secondary-text)", textTransform: "uppercase" })}>Добавить магазин</label>
+                  <SearchableSelect 
+                    name="merchantId"
+                    options={merchantOptions}
+                    placeholder="Выберите мерчанта..."
+                  />
+                </div>
+                <button type="submit" className="sber-button" style={{ width: "auto", padding: "12px 16px" }}>
+                  <Plus size={18} />
+                </button>
+              </div>
+            </form>
+
+            <div className={stack({ gap: "8px" })}>
+              {linkedMerchants.length === 0 ? (
+                <div className={css({ p: "24px", textAlign: "center", bg: "var(--surface-secondary)", borderRadius: "16px", color: "var(--secondary-text)", fontSize: "13px" })}>
+                  Отдельные магазины не привязаны
+                </div>
+              ) : (
+                linkedMerchants.map(merchant => (
+                  <div key={merchant.id} className={flex({ align: "center", justify: "space-between", p: "12px", bg: "var(--surface-secondary)", borderRadius: "14px" })}>
+                    <div className={flex({ align: "center", gap: "12px" })}>
+                      <Store size={18} className={css({ color: "var(--sber-green)" })} />
+                      <span className={css({ fontSize: "14px", color: "var(--foreground)", fontWeight: "700" })}>{merchant.name}</span>
+                    </div>
+                    <form action={unlinkMerchantFromCategory.bind(null, categoryId, merchant.id)}>
+                      <button className={css({ p: "8px", color: "#ef4444", cursor: "pointer", _hover: { bg: "rgba(239, 68, 68, 0.1)", borderRadius: "full" } })}>
+                        <Trash2 size={16} />
+                      </button>
+                    </form>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </section>
+
       </div>
     </div>
   );

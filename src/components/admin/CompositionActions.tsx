@@ -101,10 +101,10 @@ export default function CompositionActions({
                 {item.sublabel ? (
                    <>
                     <div className={css({ fontWeight: "800", color: "sberGreen", fontSize: "14px", fontVariantNumeric: "tabular-nums" })}>{item.id}</div>
-                    <span className={css({ fontSize: "13px", color: "#000", fontWeight: "600" })}>{item.label}</span>
+                    <span className={css({ fontSize: "13px", color: "var(--foreground)", fontWeight: "600" })}>{item.label}</span>
                    </>
                 ) : (
-                   <span className={css({ fontSize: "14px", color: "#000", fontWeight: "700" })}>{item.label}</span>
+                   <span className={css({ fontSize: "14px", color: "var(--foreground)", fontWeight: "700" })}>{item.label}</span>
                 )}
               </div>
               <form action={() => handleUnlink(item.id)}>

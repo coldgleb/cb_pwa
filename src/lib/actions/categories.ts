@@ -109,6 +109,7 @@ export async function updateBankCategory(id: number, formData: FormData) {
   const [category] = await db.select({ name: bankCategories.name }).from(bankCategories).where(eq(bankCategories.id, id)).limit(1);
   if (!category) throw new Error("Category not found");
 
+  const name = formData.get("name") as string;
   const defaultPercentage = parseFloat(formData.get("defaultPercentage") as string);
   const roundingType = formData.get("roundingType") as string;
   const bankCardId = parseInt(formData.get("bankCardId") as string);
@@ -133,7 +134,7 @@ export async function updateBankCategory(id: number, formData: FormData) {
   let finalTiers = tiers;
   let finalLimit = cashbackLimit;
 
-  if (category.name === "Без кешбэка") {
+  if (category.name === "Без кешбэка" || name === "Без кешбэка") {
     finalPercentage = 0;
     finalTiers = "[]";
     finalLimit = null;
@@ -141,6 +142,7 @@ export async function updateBankCategory(id: number, formData: FormData) {
 
   await db.update(bankCategories)
     .set({ 
+      name: name || category.name,
       defaultPercentage: finalPercentage, 
       roundingType, 
       tiers: finalTiers, 

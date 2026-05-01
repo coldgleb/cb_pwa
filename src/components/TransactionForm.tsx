@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useTransition } from "react";
 import { css } from "../../styled-system/css";
 import { stack, flex } from "../../styled-system/patterns";
 import { ShoppingBag, Users, Save } from "lucide-react";
@@ -8,6 +8,7 @@ import SearchableSelect from "./SearchableSelect";
 import { createTransaction, updateTransaction } from "@/lib/actions/transactions";
 import { getMerchantMccSuggestions } from "@/lib/actions/merchants";
 import { useRouter } from "next/navigation";
+import { useToast } from "./Toast";
 
 interface CardOption {
   id: number;
@@ -46,7 +47,17 @@ interface TransactionFormProps {
 
 export default function TransactionForm({ cards, merchants, mccs, initialData }: TransactionFormProps) {
   const router = useRouter();
+  const { toast } = useToast();
+  const [isPending, startTransition] = useTransition();
   const [isSplit, setIsSplit] = useState(initialData ? (initialData.paidAmount !== null && initialData.paidAmount !== initialData.amount) : false);
+  
+  // amount is the value for "Сумма" (simple mode) OR "Моя доля" (split mode)
+  const [amount, setAmount] = useState<string>(initialData?.amount?.toString() || "");
+  // paidAmount is the value for "Общий чек"
+  const [paidAmount, setPaidAmount] = useState<string>(initialData?.paidAmount?.toString() || "");
+  // storedShare remembers the "Моя доля" value when split is turned off
+  const [storedShare, setStoredShare] = useState<string>(initialData?.paidAmount ? initialData.amount.toString() : "");
+
   const [selectedMerchantName, setSelectedMerchantName] = useState(initialData?.merchantName || "");
   const [selectedMcc, setSelectedMcc] = useState(initialData?.mccCode || "");
   const [suggestedMccs, setSuggestedMccs] = useState<string[]>([]);
@@ -108,80 +119,119 @@ export default function TransactionForm({ cards, merchants, mccs, initialData }:
     }
   };
 
+  async function action(formData: FormData) {
+    startTransition(async () => {
+      try {
+        if (initialData) {
+          await updateTransaction(initialData.id, formData);
+          toast("Операция успешно обновлена", "success");
+        } else {
+          await createTransaction(formData);
+          toast("Операция успешно добавлена", "success");
+        }
+        router.push("/transactions");
+        router.refresh();
+      } catch (error) {
+        toast(error instanceof Error ? error.message : "Произошла ошибка", "error");
+      }
+    });
+  }
+
+  const toggleSplit = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (!isSplit) {
+      // Turning split ON
+      // "Сумма" goes to "Общий чек"
+      setPaidAmount(amount);
+      // "Моя доля" gets stored value (empty or previous entry)
+      setAmount(storedShare);
+    } else {
+      // Turning split OFF
+      // Save current "Моя доля" for later
+      setStoredShare(amount);
+      // "Общий чек" becomes "Сумма"
+      setAmount(paidAmount);
+    }
+    setIsSplit(!isSplit);
+  };
+
   return (
     <section className="sber-card">
       <div className={flex({ align: "center", gap: "10px", mb: "24px" })}>
         <div className={css({ p: "6px", bg: "#3b82f6", borderRadius: "8px", color: "white" })}>
           <ShoppingBag size={18} />
         </div>
-        <h2 className={css({ fontSize: "17px", fontWeight: "700", color: "#000" })}>
+        <h2 className={css({ fontSize: "17px", fontWeight: "700", color: "var(--foreground)" })}>
           {initialData ? "Редактирование" : "Детали операции"}
         </h2>
       </div>
 
-      <form action={async (formData) => {
-        if (initialData) {
-          await updateTransaction(initialData.id, formData);
-        } else {
-          await createTransaction(formData);
-        }
-        router.push("/transactions");
-        router.refresh();
-      }} className={stack({ gap: "24px" })}>
+      <form action={action} className={stack({ gap: "24px" })}>
         
         {/* Split Check Toggle */}
         <div 
           role="button"
           tabIndex={0}
-          onClick={(e) => {
-            e.preventDefault();
-            setIsSplit(!isSplit);
-          }}
-          className={flex({ align: "center", gap: "12px", p: "12px", bg: "#f8fafc", borderRadius: "14px", cursor: "pointer", userSelect: "none", WebkitTapHighlightColor: "transparent" })}
+          onClick={toggleSplit}
+          className={flex({ 
+            align: "center", 
+            gap: "12px", 
+            p: "12px", 
+            bg: "var(--surface-secondary)", 
+            border: "1px solid",
+            borderColor: "var(--border-color)",
+            borderRadius: "14px", 
+            cursor: "pointer", 
+            userSelect: "none", 
+            WebkitTapHighlightColor: "transparent",
+            wrap: "wrap" 
+          })}
         >
           <div className={css({ 
-            w: "40px", h: "24px", bg: isSplit ? "sberGreen" : "#cbd5e1", borderRadius: "full", position: "relative", transition: "all 0.2s" 
+            w: "40px", h: "24px", bg: isSplit ? "sberGreen" : "#cbd5e1", borderRadius: "full", position: "relative", transition: "all 0.2s", flexShrink: 0
           })}>
             <div className={css({ 
               position: "absolute", top: "2px", left: isSplit ? "18px" : "2px", w: "20px", h: "20px", bg: "white", borderRadius: "full", shadow: "sm", transition: "all 0.2s" 
             })} />
           </div>
-          <div className={flex({ align: "center", gap: "8px" })}>
+          <div className={flex({ align: "center", gap: "8px", flex: 1, minW: "200px" })}>
             <Users size={16} className={css({ color: isSplit ? "sberGreen" : "#64748b" })} />
-            <span className={css({ fontSize: "14px", fontWeight: "600", color: "#000" })}>Оплачивал за других (разделить чек)</span>
+            <span className={css({ fontSize: "14px", fontWeight: "600", color: "var(--foreground)" })}>Оплачивал за других (разделить чек)</span>
           </div>
         </div>
 
         <div className={stack({ gap: "16px" })}>
           {isSplit ? (
-            <div className={flex({ gap: "12px" })}>
-              <div className={stack({ gap: "6px", flex: 1 })}>
+            <div className={flex({ gap: "12px", wrap: { base: "wrap", sm: "nowrap" } })}>
+              <div className={stack({ gap: "6px", flex: 1, minW: "140px" })}>
                 <label className="sber-label">ОБЩИЙ ЧЕК</label>
                 <input 
                   name="paidAmount" 
                   type="number" 
                   step="0.01" 
                   required 
-                  defaultValue={initialData?.paidAmount || initialData?.amount || ""}
+                  value={paidAmount}
+                  onChange={(e) => setPaidAmount(e.target.value)}
                   placeholder="700.00"
                   className="sber-input" 
                   style={{ fontSize: "20px", fontWeight: "800" }}
                 />
-                <p className={css({ fontSize: "10px", color: "secondaryText", ml: "4px" })}>ДЛЯ РАСЧЕТА КЕШБЭКА</p>
+                <p className={css({ fontSize: "10px", color: "var(--secondary-text)", ml: "4px" })}>ДЛЯ РАСЧЕТА КЕШБЭКА</p>
               </div>
-              <div className={stack({ gap: "6px", flex: 1 })}>
+              <div className={stack({ gap: "6px", flex: 1, minW: "140px" })}>
                 <label className="sber-label">МОЯ ДОЛЯ</label>
                 <input 
                   name="amount" 
                   type="number" 
                   step="0.01" 
                   required 
-                  defaultValue={initialData?.amount || ""}
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
                   placeholder="350.00"
                   className="sber-input" 
                   style={{ fontSize: "20px", fontWeight: "800" }}
                 />
-                <p className={css({ fontSize: "10px", color: "secondaryText", ml: "4px" })}>ДЛЯ СТАТИСТИКИ ТРАТ</p>
+                <p className={css({ fontSize: "10px", color: "var(--secondary-text)", ml: "4px" })}>ДЛЯ СТАТИСТИКИ ТРАТ</p>
               </div>
             </div>
           ) : (
@@ -192,7 +242,8 @@ export default function TransactionForm({ cards, merchants, mccs, initialData }:
                 type="number" 
                 step="0.01" 
                 required 
-                defaultValue={initialData?.amount || ""}
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
                 placeholder="0.00"
                 className="sber-input" 
                 style={{ fontSize: "28px", fontWeight: "800", height: "64px" }}
@@ -201,16 +252,20 @@ export default function TransactionForm({ cards, merchants, mccs, initialData }:
           )}
         </div>
 
+
+
         <div className={stack({ gap: "6px" })}>
           <label className="sber-label">КАРТА</label>
-          <select name="userCardId" required defaultValue={initialData?.userCardId || ""} className="sber-select">
-            <option value="">Выберите карту...</option>
-            {cards.map(card => (
-              <option key={card.id} value={card.id}>
-                {card.bankName} {card.cardName} {card.lastFour ? `• ${card.lastFour}` : ''}
-              </option>
-            ))}
-          </select>
+          <SearchableSelect 
+            name="userCardId" 
+            required 
+            defaultValue={initialData?.userCardId?.toString() || ""} 
+            options={cards.map(card => ({
+              value: card.id.toString(),
+              label: `${card.bankName} ${card.cardName} ${card.lastFour ? `• ${card.lastFour}` : ''}`
+            }))}
+            placeholder="Выберите карту..."
+          />
         </div>
 
         <div className={stack({ gap: "6px" })}>
@@ -282,10 +337,11 @@ export default function TransactionForm({ cards, merchants, mccs, initialData }:
           </p>
         </div>
 
-        <button className="sber-button" style={{ marginTop: "8px" }}>
-          {initialData ? <><Save size={18} /> Сохранить изменения</> : "Записать покупку"}
+        <button type="submit" className="sber-button" style={{ marginTop: "8px" }} disabled={isPending}>
+          {isPending ? "Сохранение..." : (initialData ? <><Save size={18} /> Сохранить изменения</> : "Записать покупку")}
         </button>
       </form>
     </section>
   );
 }
+

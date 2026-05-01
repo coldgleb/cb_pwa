@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useTransition } from "react";
 import { stack } from "../../styled-system/patterns";
 import SearchableSelect from "./SearchableSelect";
 import { addUserCard } from "@/lib/actions/user-cards";
+import { useToast } from "./Toast";
+import { useRouter } from "next/navigation";
 
 interface Bank {
   id: number;
@@ -24,6 +26,9 @@ interface AddUserCardFormProps {
 export default function AddUserCardForm({ banks, cardTypes }: AddUserCardFormProps) {
   const [selectedBankId, setSelectedBankId] = useState<string>("");
   const [selectedCardId, setSelectedCardId] = useState<string>("");
+  const [isPending, startTransition] = useTransition();
+  const { toast } = useToast();
+  const router = useRouter();
 
   const bankOptions = useMemo(() => 
     banks.map(b => ({ value: b.id.toString(), label: b.name })),
@@ -42,8 +47,20 @@ export default function AddUserCardForm({ banks, cardTypes }: AddUserCardFormPro
     setSelectedCardId(""); // Reset card selection when bank changes
   };
 
+  async function action(formData: FormData) {
+    startTransition(async () => {
+      try {
+        await addUserCard(formData);
+        toast("Карта успешно добавлена", "success");
+        router.push("/cards");
+      } catch (error) {
+        toast(error instanceof Error ? error.message : "Ошибка при добавлении карты", "error");
+      }
+    });
+  }
+
   return (
-    <form action={addUserCard} className={stack({ gap: "20px" })}>
+    <form action={action} className={stack({ gap: "20px" })}>
       <div className={stack({ gap: "6px" })}>
         <label className="sber-label">БАНК-ЭМИТЕНТ</label>
         <SearchableSelect 
@@ -83,11 +100,12 @@ export default function AddUserCardForm({ banks, cardTypes }: AddUserCardFormPro
       <button 
         type="submit" 
         className="sber-button"
-        disabled={!selectedCardId}
-        style={{ opacity: !selectedCardId ? 0.6 : 1 }}
+        disabled={!selectedCardId || isPending}
+        style={{ opacity: !selectedCardId || isPending ? 0.6 : 1 }}
       >
-        Добавить в кошелек
+        {isPending ? "Добавление..." : "Добавить в кошелек"}
       </button>
     </form>
   );
 }
+

@@ -67,13 +67,13 @@ export default async function CardDetailsPage({
   .orderBy(desc(userCashbackRules.percentage));
 
   return (
-    <div className={css({ minH: "100vh", bg: "#f4f4f4" })}>
+    <div className={css({ minH: "100vh", bg: "var(--background)" })}>
       <div className="sber-container">
         <header className={stack({ gap: "4px", mb: "32px" })}>
           <a href="/cards" className="sber-icon-button">
             <ArrowLeft size={20} />
           </a>
-          <h1 className={css({ fontSize: "24px", fontWeight: "800", color: "#000" })}>Настройка карты</h1>
+          <h1 className={css({ fontSize: "24px", fontWeight: "800", color: "var(--foreground)" })}>Настройка карты</h1>
           <p className={css({ fontSize: "14px", color: "secondaryText", fontWeight: "600" })}>
             {card.bankName} — {card.name} {card.lastFour ? `• ${card.lastFour}` : ''}
           </p>
@@ -83,10 +83,10 @@ export default async function CardDetailsPage({
           {/* Общие настройки */}
           <section className="sber-card">
             <div className={flex({ align: "center", gap: "10px", mb: "24px" })}>
-              <div className={css({ p: "6px", bg: "#64748b", borderRadius: "8px", color: "white" })}>
+              <div className={css({ p: "6px", bg: "var(--secondary-text)", borderRadius: "8px", color: "white" })}>
                 <CreditCard size={18} />
               </div>
-              <h2 className={css({ fontSize: "17px", fontWeight: "700", color: "#000" })}>Настройки карты</h2>
+              <h2 className={css({ fontSize: "17px", fontWeight: "700", color: "var(--foreground)" })}>Настройки карты</h2>
             </div>
 
             <form action={updateUserCard.bind(null, userCardId)} className={stack({ gap: "20px" })}>
@@ -113,7 +113,7 @@ export default async function CardDetailsPage({
                   />
                 </div>
               </div>
-              <button type="submit" className="sber-button" style={{ backgroundColor: "#64748b" }}>
+              <button type="submit" className="sber-button" style={{ backgroundColor: "var(--secondary-text)" }}>
                 <Save size={18} /> Сохранить настройки
               </button>
             </form>
@@ -126,31 +126,6 @@ export default async function CardDetailsPage({
             initialMonth={yearMonth}
             activeRules={activeRules.map(r => ({ categoryId: r.bankCategoryId!, percentage: r.percentage }))}
           />
-
-          {/* Список активных */}
-          <section className={stack({ gap: "16px" })}>
-            <div className={flex({ align: "center", gap: "8px" })}>
-              <Calendar size={18} className={css({ color: "sberGreen" })} />
-              <h3 className="sber-label">ДЕЙСТВУЕТ В {yearMonth === currentMonth ? "ЭТОМ МЕСЯЦЕ" : yearMonth}</h3>
-            </div>
-            
-            <div className={stack({ gap: "12px" })}>
-              {activeRules.length === 0 ? (
-                <div className={css({ py: "40px", textAlign: "center", color: "secondaryText", bg: "white", borderRadius: "24px", border: "1px dashed", borderColor: "#e2e8f0", fontSize: "14px" })}>
-                  Правила на выбранный месяц еще не настроены
-                </div>
-              ) : (
-                activeRules.map(rule => (
-                  <div key={rule.id} className="sber-card" style={{ padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <p className={css({ fontWeight: "700", fontSize: "15px", color: "#000" })}>{rule.categoryName}</p>
-                    <div className={css({ px: "10px", py: "6px", bg: "#f0fdf4", color: "sberGreen", borderRadius: "10px", fontSize: "18px", fontWeight: "900" })}>
-                      {rule.percentage}%
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </section>
         </div>
       </div>
     </div>

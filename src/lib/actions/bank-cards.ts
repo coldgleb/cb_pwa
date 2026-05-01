@@ -67,3 +67,17 @@ export async function updateBankCard(id: number, formData: FormData) {
   revalidatePath("/admin/bank-cards");
   revalidatePath(`/admin/bank-cards/${id}`);
 }
+
+export async function deleteBankCard(id: number) {
+  const session = await auth();
+  if (session?.user?.role !== "admin") throw new Error("Unauthorized");
+
+  // Related categories, settings, etc. should ideally be deleted or handled.
+  // Assuming cascade is not fully set up in SQLite via Drizzle automatically without explicit schema support.
+  
+  await db.delete(bankCategories).where(eq(bankCategories.bankCardId, id));
+  await db.delete(bankCardSettings).where(eq(bankCardSettings.bankCardId, id));
+  await db.delete(bankCards).where(eq(bankCards.id, id));
+
+  revalidatePath("/admin/bank-cards");
+}

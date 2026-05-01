@@ -41,9 +41,7 @@ export default function BottomNav({ isAdmin = false }: BottomNavProps) {
       bottom: 0,
       left: 0,
       right: 0,
-      bg: "white",
-      borderTop: "1px solid",
-      borderColor: "#f1f5f9",
+      bg: "var(--card-bg)",
       boxShadow: "0 -4px 15px rgba(0,0,0,0.03)",
       zIndex: 1000,
       pb: "safe-area-inset-bottom", // Support for notch phones

@@ -21,7 +21,7 @@ export default async function MerchantsPage() {
 
   return (
     <div className={stack({ gap: "32px" })}>
-      <h1 className={css({ fontSize: "24px", fontWeight: "800", color: "#000" })}>Мерчанты</h1>
+      <h1 className={css({ fontSize: "24px", fontWeight: "800", color: "var(--foreground)" })}>Мерчанты</h1>
 
       {/* Global MCC Search List */}
       <datalist id="mcc-list">
@@ -36,7 +36,7 @@ export default async function MerchantsPage() {
           <div className={css({ p: "6px", bg: "sberGreen", borderRadius: "8px", color: "white" })}>
             <Plus size={18} />
           </div>
-          <h2 className={css({ fontSize: "17px", fontWeight: "700", color: "#000" })}>Новый мерчант</h2>
+          <h2 className={css({ fontSize: "17px", fontWeight: "700", color: "var(--foreground)" })}>Новый мерчант</h2>
         </div>
 
         <form action={createMerchant} className={stack({ gap: "20px" })}>
@@ -105,7 +105,7 @@ export default async function MerchantsPage() {
       {/* Список мерчантов */}
       <section className={stack({ gap: "16px" })}>
         <h3 className="sber-label">СПИСОК ТОРГОВЫХ ТОЧЕК</h3>
-        <div className={stack({ gap: "12px" })}>
+        <div className={grid({ columns: { base: 1, xl: 2 }, gap: "12px" })}>
           {allMerchants.map((merchant) => {
             const icon = getIconUrl(merchant);
             return (
@@ -125,7 +125,7 @@ export default async function MerchantsPage() {
                           name="name" 
                           defaultValue={merchant.name} 
                           required 
-                          className={css({ fontWeight: "700", fontSize: "16px", color: "#000", border: "none", bg: "transparent", borderBottom: "1px dashed", borderColor: "#e2e8f0", w: "full", _focus: { borderColor: "sberGreen", outline: "none" } })}
+                          className={css({ fontWeight: "700", fontSize: "16px", color: "var(--foreground)", border: "none", bg: "transparent", borderBottom: "1px dashed", borderColor: "#e2e8f0", w: "full", _focus: { borderColor: "sberGreen", outline: "none" } })}
                         />
                         <div className={stack({ gap: "2px", mt: "4px", w: "full", maxW: { base: "200px", sm: "300px" } })}>
                           <label className={css({ fontSize: "9px", fontWeight: "800", color: "secondaryText" })}>ОСНОВНОЙ MCC</label>
@@ -171,7 +171,7 @@ export default async function MerchantsPage() {
                     <input 
                       name="additionalMccs" 
                       defaultValue={merchant.additionalMccs} 
-                      className={css({ fontSize: "12px", color: "#475569", bg: "#f1f5f9", px: "8px", py: "4px", borderRadius: "8px", border: "none", width: "full", _focus: { outline: "none", ring: "1px solid gray" } })}
+                      className={css({ fontSize: "12px", color: "var(--foreground)", bg: "var(--input-bg)", px: "8px", py: "4px", borderRadius: "8px", border: "none", width: "full", _focus: { outline: "none", ring: "1px solid gray" } })}
                     />
                   </div>
                 </form>
@@ -183,7 +183,7 @@ export default async function MerchantsPage() {
             );
           })}
           {allMerchants.length === 0 && (
-            <div className={css({ py: "40px", textAlign: "center", color: "secondaryText", bg: "white", borderRadius: "24px" })}>
+            <div className={css({ gridColumn: "1/-1", py: "40px", textAlign: "center", color: "secondaryText", bg: "var(--card-bg)", borderRadius: "24px" })}>
               Список мерчантов пуст
             </div>
           )}

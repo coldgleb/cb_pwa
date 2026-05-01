@@ -4,8 +4,9 @@ import { db } from "@/db";
 import { users } from "@/db/schema";
 import bcrypt from "bcryptjs";
 import { redirect } from "next/navigation";
-import { signIn } from "@/auth";
+import { signIn, auth } from "@/auth";
 import { AuthError } from "next-auth";
+import { eq } from "drizzle-orm";
 
 export async function registerUser(formData: FormData) {
   const email = formData.get("email") as string;
@@ -42,8 +43,6 @@ export async function registerUser(formData: FormData) {
   redirect("/");
 }
 
-import { eq } from "drizzle-orm";
-
 export async function loginUser(formData: FormData) {
   try {
     await signIn("credentials", {
@@ -61,4 +60,21 @@ export async function loginUser(formData: FormData) {
     }
     throw error; // Rethrow redirect error
   }
+}
+
+export async function updateProfile(formData: FormData) {
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("Не авторизован");
+  const name = formData.get("name") as string;
+  if (!name) throw new Error("Имя не может быть пустым");
+  await db.update(users).set({ name }).where(eq(users.id, session.user.id));
+}
+
+export async function updatePassword(formData: FormData) {
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("Не авторизован");
+  const password = formData.get("password") as string;
+  if (!password || password.length < 6) throw new Error("Слишком короткий пароль");
+  const hashedPassword = await bcrypt.hash(password, 10);
+  await db.update(users).set({ password: hashedPassword }).where(eq(users.id, session.user.id));
 }

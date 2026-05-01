@@ -81,53 +81,53 @@ export default async function CategoryCompositionPage({ params }: { params: Prom
   const merchantOptions = availableMerchants.map(m => ({ value: m.id.toString(), label: m.name }));
 
   return (
-    <div className={css({ minH: "100vh", bg: "#f4f4f4" })}>
-      <div className="sber-container">
-        <header className={stack({ gap: "4px", mb: "32px" })}>
-          <a href={`/admin/bank-cards/${category.bankCardId}`} className="sber-icon-button">
-            <ArrowLeft size={20} />
-          </a>
-          <h1 className={css({ fontSize: "24px", fontWeight: "800", color: "#000" })}>Состав "{category.name}"</h1>
-          <p className={css({ fontSize: "14px", color: "secondaryText", fontWeight: "600" })}>{category.bankName} • {category.cardName}</p>
-        </header>
-
-        <div className={stack({ gap: "40px" })}>
-          
-          {/* Блок МСС */}
-          <section className={stack({ gap: "16px" })}>
-            <div className={flex({ align: "center", justify: "space-between" })}>
-              <h2 className="sber-label">ПРИВЯЗАННЫЕ MCC-КОДЫ</h2>
-              <CopyMccsButton mccs={linkedMcc.map(m => m.code).join(", ")} />
-            </div>
-            
-            <CompositionActions 
-              categoryId={categoryId}
-              type="mcc"
-              options={mccOptions}
-              linkAction={linkMccToCategory}
-              unlinkAction={unlinkMccFromCategory}
-              linkMultipleAction={linkMultipleMccToCategory}
-              linkedItems={linkedMcc.map(m => ({ id: m.code, label: m.description, sublabel: m.code }))}
-            />
-          </section>
-
-          {/* Блок Мерчантов */}
-          <section className={stack({ gap: "16px" })}>
-            <div className={flex({ align: "center", justify: "space-between" })}>
-              <h2 className="sber-label">ПРИВЯЗАННЫЕ МЕРЧАНТЫ (МАГАЗИНЫ)</h2>
-            </div>
-            
-            <CompositionActions 
-              categoryId={categoryId}
-              type="merchant"
-              options={merchantOptions}
-              linkAction={linkMerchantToCategory}
-              unlinkAction={unlinkMerchantFromCategory}
-              linkedItems={linkedMerchants.map(m => ({ id: m.id, label: m.name }))}
-            />
-          </section>
-
+    <div className={stack({ gap: "32px" })}>
+      <header className={flex({ align: "center", gap: "16px", mb: "8px" })}>
+        <a href={`/admin/bank-cards/${category.bankCardId}`} className="sber-icon-button">
+          <ArrowLeft size={20} />
+        </a>
+        <div className={stack({ gap: "4px" })}>
+          <h1 className={css({ fontSize: "24px", fontWeight: "800", color: "var(--foreground)" })}>Состав "{category.name}"</h1>
+          <p className={css({ fontSize: "14px", color: "var(--secondary-text)", fontWeight: "600" })}>{category.bankName} • {category.cardName}</p>
         </div>
+      </header>
+
+      <div className={stack({ gap: "40px" })}>
+        
+        {/* Блок МСС */}
+        <section className={stack({ gap: "16px" })}>
+          <div className={flex({ align: "center", justify: "space-between" })}>
+            <h2 className="sber-label">ПРИВЯЗАННЫЕ MCC-КОДЫ</h2>
+            <CopyMccsButton mccs={linkedMcc.map(m => m.code).join(", ")} />
+          </div>
+          
+          <CompositionActions 
+            categoryId={categoryId}
+            type="mcc"
+            options={mccOptions}
+            linkAction={linkMccToCategory}
+            unlinkAction={unlinkMccFromCategory}
+            linkMultipleAction={linkMultipleMccToCategory}
+            linkedItems={linkedMcc.map(m => ({ id: m.code, label: m.description, sublabel: m.code }))}
+          />
+        </section>
+
+        {/* Блок Мерчантов */}
+        <section className={stack({ gap: "16px" })}>
+          <div className={flex({ align: "center", justify: "space-between" })}>
+            <h2 className="sber-label">ПРИВЯЗАННЫЕ МЕРЧАНТЫ (МАГАЗИНЫ)</h2>
+          </div>
+          
+          <CompositionActions 
+            categoryId={categoryId}
+            type="merchant"
+            options={merchantOptions}
+            linkAction={linkMerchantToCategory}
+            unlinkAction={unlinkMerchantFromCategory}
+            linkedItems={linkedMerchants.map(m => ({ id: m.id, label: m.name }))}
+          />
+        </section>
+
       </div>
     </div>
   );

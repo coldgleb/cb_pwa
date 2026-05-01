@@ -7,13 +7,13 @@ export const dynamic = "force-dynamic";
 
 export default function RegisterPage() {
   return (
-    <div className={css({ minH: "100vh", bg: "#f4f4f4" })}>
+    <div className={css({ minH: "100vh", bg: "var(--background)" })}>
       <div className="sber-container" style={{ maxWidth: "440px" }}>
         <div className={stack({ align: "center", mb: "40px", gap: "12px" })}>
           <div className={css({ w: "80px", h: "80px", bg: "sberGreen", borderRadius: "28px", display: "flex", alignItems: "center", justifyContent: "center", color: "white", shadow: "0 10px 25px rgba(33,160,56,0.3)", mb: "12px" })}>
             <UserPlus size={44} />
           </div>
-          <h1 className={css({ fontSize: "28px", fontWeight: "900", letterSpacing: "-0.5px", color: "#000" })}>Новый профиль</h1>
+          <h1 className={css({ fontSize: "28px", fontWeight: "900", letterSpacing: "-0.5px", color: "var(--foreground)" })}>Новый профиль</h1>
           <p className={css({ color: "secondaryText", fontSize: "15px", textAlign: "center", fontWeight: "500", maxWidth: "280px" })}>
             Создайте аккаунт, чтобы начать отслеживать кешбэк
           </p>

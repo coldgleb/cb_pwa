@@ -22,10 +22,10 @@ export default async function EditBankPage({ params }: { params: Promise<{ id: s
   return (
     <div className={stack({ gap: "32px" })}>
       <header className={flex({ align: "center", gap: "16px" })}>
-        <a href="/admin/banks" className={css({ w: "40px", h: "40px", bg: "white", borderRadius: "full", shadow: "sm", display: "flex", alignItems: "center", justifyContent: "center", color: "secondaryText" })}>
+        <a href="/admin/banks" className={css({ w: "40px", h: "40px", bg: "var(--card-bg)", borderRadius: "full", shadow: "sm", display: "flex", alignItems: "center", justifyContent: "center", color: "secondaryText" })}>
           <ArrowLeft size={20} />
         </a>
-        <h1 className={css({ fontSize: "22px", fontWeight: "800", color: "#000" })}>Редактировать банк</h1>
+        <h1 className={css({ fontSize: "22px", fontWeight: "800", color: "var(--foreground)" })}>Редактировать банк</h1>
       </header>
 
       <div className={stack({ gap: "24px" })}>

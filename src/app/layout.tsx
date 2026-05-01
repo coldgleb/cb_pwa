@@ -33,18 +33,22 @@ export const viewport: Viewport = {
   userScalable: false,
 };
 
+import { ThemeProvider } from "@/components/ThemeProvider";
+
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ru" className={`${geistSans.variable} ${geistMono.variable}`}>
+    <html lang="ru" className={`${geistSans.variable} ${geistMono.variable}`} suppressHydrationWarning>
       <body style={{ paddingBottom: 'calc(80px + env(safe-area-inset-bottom))' }}>
-        <ToastProvider>
-          {children}
-          <BottomNavWrapper />
-        </ToastProvider>
+        <ThemeProvider>
+          <ToastProvider>
+            {children}
+            <BottomNavWrapper />
+          </ToastProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

@@ -95,28 +95,28 @@ export default function SearchableSelect({
           gap: "10px", 
           px: "14px", 
           py: "12px", 
-          bg: disabled ? "#f1f5f9" : "white", 
+          bg: disabled ? "var(--surface-secondary)" : "var(--input-bg)", 
           border: "1px solid", 
-          borderColor: isOpen ? "sberGreen" : "#e2e8f0", 
+          borderColor: isOpen ? "var(--sber-green)" : "var(--border-color)", 
           borderRadius: "14px", 
           cursor: disabled ? "not-allowed" : "pointer",
           transition: "all 0.2s",
           WebkitTapHighlightColor: "transparent",
-          _active: { bg: disabled ? "#f1f5f9" : "#f8fafc" },
+          _active: { bg: disabled ? "var(--surface-secondary)" : "var(--surface-secondary)" },
           w: "full",
           opacity: disabled ? 0.7 : 1
         })}
       >
         <div className={css({ flex: 1, overflow: "hidden", minW: 0 })}>
           {currentSelection ? (
-            <p className={css({ fontSize: "14px", fontWeight: "600", color: disabled ? "#64748b" : "#000", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" })}>
+            <p className={css({ fontSize: "14px", fontWeight: "600", color: disabled ? "var(--secondary-text)" : "var(--foreground)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" })}>
               {currentSelection.label}
             </p>
           ) : (
-            <p className={css({ fontSize: "14px", color: "#94a3b8", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" })}>{placeholder}</p>
+            <p className={css({ fontSize: "14px", color: "var(--secondary-text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" })}>{placeholder}</p>
           )}
         </div>
-        {!disabled && <ChevronDown size={18} className={css({ color: "#64748b", transform: isOpen ? "rotate(180deg)" : "none", transition: "transform 0.2s" })} />}
+        {!disabled && <ChevronDown size={18} className={css({ color: "var(--secondary-text)", transform: isOpen ? "rotate(180deg)" : "none", transition: "transform 0.2s" })} />}
       </div>
 
       {/* Dropdown Panel */}
@@ -126,26 +126,26 @@ export default function SearchableSelect({
           top: "calc(100% + 4px)", 
           left: 0, 
           right: 0, 
-          bg: "white", 
+          bg: "var(--card-bg)", 
           borderRadius: "18px", 
-          shadow: "0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1)", 
+          shadow: "0 10px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.1)", 
           border: "1px solid", 
-          borderColor: "#e2e8f0", 
-          zIndex: 9999, 
+          borderColor: "var(--border-color)", 
+          zIndex: 10000, 
           p: "8px",
           gap: "4px",
           maxH: "260px",
           overflow: "visible"
         })}>
           {/* Search Input inside dropdown */}
-          <div className={flex({ align: "center", gap: "10px", px: "12px", py: "10px", bg: "#f8fafc", borderRadius: "12px", mb: "4px" })}>
-            <Search size={16} className={css({ color: "#94a3b8" })} />
+          <div className={flex({ align: "center", gap: "10px", px: "12px", py: "10px", bg: "var(--surface-secondary)", borderRadius: "12px", mb: "4px" })}>
+            <Search size={16} className={css({ color: "var(--secondary-text)" })} />
             <input 
               autoFocus
               placeholder="Поиск..."
               value={searchValue}
               onChange={(e) => setSearchValue(e.target.value)}
-              className={css({ bg: "transparent", border: "none", outline: "none", fontSize: "16px", w: "full", color: "#000" })}
+              className={css({ bg: "transparent", border: "none", outline: "none", fontSize: "16px", w: "full", color: "var(--foreground)" })}
             />
           </div>
 
@@ -167,19 +167,19 @@ export default function SearchableSelect({
                     borderRadius: "10px", 
                     cursor: "pointer", 
                     WebkitTapHighlightColor: "transparent",
-                    _hover: { bg: "#f1f5f9" },
-                    _active: { bg: "#e2e8f0" },
-                    bg: currentSelection?.value === opt.value ? "#f0fdf4" : "transparent"
+                    _hover: { bg: "var(--surface-secondary)" },
+                    _active: { bg: "var(--border-color)" },
+                    bg: currentSelection?.value === opt.value ? "rgba(33, 160, 56, 0.1)" : "transparent"
                   })}
                 >
                   <span className={css({ 
                     fontSize: "13px", 
                     fontWeight: currentSelection?.value === opt.value ? "700" : "500",
-                    color: currentSelection?.value === opt.value ? "sberGreen" : "#334155" 
+                    color: currentSelection?.value === opt.value ? "var(--sber-green)" : "var(--foreground)" 
                   })}>
                     {opt.label}
                   </span>
-                  {currentSelection?.value === opt.value && <Check size={14} className={css({ color: "sberGreen" })} />}
+                  {currentSelection?.value === opt.value && <Check size={14} className={css({ color: "var(--sber-green)" })} />}
                 </div>
               ))
             ) : (
@@ -197,16 +197,16 @@ export default function SearchableSelect({
                     py: "10px", 
                     borderRadius: "10px", 
                     cursor: "pointer", 
-                    bg: "#eff6ff",
-                    color: "#1e40af",
-                    _hover: { bg: "#dbeafe" }
+                    bg: "rgba(59, 130, 246, 0.1)",
+                    color: "rgb(59, 130, 246)",
+                    _hover: { bg: "rgba(59, 130, 246, 0.2)" }
                   })}
                 >
                   <Plus size={14} />
-                  <span className={css({ fontSize: "13px", fontWeight: "700" })}>Использовать "{searchValue}"</span>
+                  <span className={css({ fontSize: "13px", fontWeight: "700" })}>Использовать &quot;{searchValue}&quot;</span>
                 </div>
               ) : (
-                <div className={css({ py: "20px", textAlign: "center", color: "#94a3b8", fontSize: "13px" })}>
+                <div className={css({ py: "20px", textAlign: "center", color: "var(--secondary-text)", fontSize: "13px" })}>
                   Ничего не найдено
                 </div>
               )

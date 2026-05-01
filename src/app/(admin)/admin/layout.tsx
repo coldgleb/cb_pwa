@@ -22,20 +22,20 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   ];
 
   return (
-    <div className={css({ minH: "100vh", bg: "#f4f4f4" })}>
+    <div className={css({ minH: "100vh", bg: "var(--background)", color: "var(--foreground)" })}>
       {/* Fixed Header Container */}
-      <div className={css({ position: "sticky", top: 0, zIndex: 100, bg: "#f4f4f4" })}>
+      <div className={css({ position: "sticky", top: 0, zIndex: 100, bg: "var(--background)" })}>
         {/* Навигация */}
-        <nav className={css({ bg: "white", borderBottom: "1px solid", borderColor: "#e2e8f0", py: "12px" })}>
-          <div className={container({ maxWidth: "512px", px: "20px" })}>
+        <nav className={css({ bg: "var(--card-bg)", borderBottom: "1px solid", borderColor: "var(--border-color)", py: "12px" })}>
+          <div className={container({ maxWidth: { base: "512px", lg: "100%" }, px: { base: "20px", lg: "40px" } })}>
             <div className={flex({ align: "center", justify: "space-between" })}>
               <div className={flex({ align: "center", gap: "10px" })}>
-                <div className={css({ w: "32px", h: "32px", bg: "#0f172a", borderRadius: "10px", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontSize: "10px", fontWeight: "bold" })}>
+                <div className={css({ w: "32px", h: "32px", bg: "var(--foreground)", borderRadius: "10px", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--card-bg)", fontSize: "10px", fontWeight: "bold" })}>
                   AD
                 </div>
-                <span className={css({ fontSize: "15px", fontWeight: "800", color: "#000" })}>Админка</span>
+                <span className={css({ fontSize: "15px", fontWeight: "800", color: "var(--foreground)" })}>Админка</span>
               </div>
-              <a href="/" className={css({ p: "8px", color: "#21a038" })}>
+              <a href="/" className={css({ p: "8px", color: "var(--sber-green)" })}>
                 <LayoutDashboard size={20} />
               </a>
             </div>
@@ -43,8 +43,8 @@ export default async function AdminLayout({ children }: { children: ReactNode })
         </nav>
 
         {/* Горизонтальное меню */}
-        <div className={css({ bg: "white", borderBottom: "1px solid", borderColor: "#e2e8f0", mb: "24px" })}>
-          <div className={container({ maxWidth: "512px", px: "20px", py: "16px" })}>
+        <div className={css({ bg: "var(--card-bg)", mb: "24px" })}>
+          <div className={container({ maxWidth: { base: "512px", lg: "100%" }, px: { base: "20px", lg: "40px" }, py: "16px" })}>
             <div className={flex({ gap: "16px", overflowX: "auto" })}>
               {navItems.map((item) => {
                 const Icon = item.icon;
@@ -54,17 +54,19 @@ export default async function AdminLayout({ children }: { children: ReactNode })
                       w: "48px", 
                       h: "48px", 
                       borderRadius: "14px", 
-                      bg: "#f8fafc", 
+                      bg: "var(--input-bg)", 
                       display: "flex", 
                       alignItems: "center", 
                       justifyContent: "center", 
-                      color: "#64748b",
+                      color: "var(--secondary-text)",
                       border: "1px solid",
-                      borderColor: "#f1f5f9"
+                      borderColor: "var(--border-color)",
+                      transition: "all 0.2s",
+                      _hover: { bg: "var(--border-color)", color: "var(--sber-green)", borderColor: "var(--sber-green)" }
                     })}>
                       <Icon size={20} />
                     </div>
-                    <span className={css({ fontSize: "11px", fontWeight: "700", color: "#64748b", textAlign: "center" })}>{item.label}</span>
+                    <span className={css({ fontSize: "11px", fontWeight: "700", color: "var(--secondary-text)", textAlign: "center" })}>{item.label}</span>
                   </a>
                 );
               })}
@@ -73,7 +75,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
         </div>
       </div>
 
-      <main className={container({ maxWidth: "512px", px: "20px", pb: "calc(100px + env(safe-area-inset-bottom))" })}>
+      <main className={container({ maxWidth: { base: "512px", lg: "100%" }, px: { base: "20px", lg: "40px" }, pb: "calc(100px + env(safe-area-inset-bottom))" })}>
         {children}
       </main>
     </div>

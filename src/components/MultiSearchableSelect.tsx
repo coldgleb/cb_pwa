@@ -88,14 +88,14 @@ export default function MultiSearchableSelect({
           gap: "10px", 
           px: "14px", 
           py: "12px", 
-          bg: "white", 
+          bg: "var(--input-bg)", 
           border: "1px solid", 
-          borderColor: isOpen ? "sberGreen" : "#e2e8f0", 
+          borderColor: isOpen ? "var(--sber-green)" : "var(--border-color)", 
           borderRadius: "14px", 
           cursor: "pointer",
           transition: "all 0.2s",
           WebkitTapHighlightColor: "transparent",
-          _active: { bg: "#f8fafc" },
+          _active: { bg: "var(--surface-secondary)" },
           w: "full"
         })}
       >
@@ -103,7 +103,7 @@ export default function MultiSearchableSelect({
           <p className={css({ 
             fontSize: "14px", 
             fontWeight: selectedValues.size > 0 ? "600" : "400", 
-            color: selectedValues.size > 0 ? "#000" : "#94a3b8", 
+            color: selectedValues.size > 0 ? "var(--foreground)" : "var(--secondary-text)", 
             whiteSpace: "nowrap", 
             overflow: "hidden", 
             textOverflow: "ellipsis" 
@@ -111,7 +111,7 @@ export default function MultiSearchableSelect({
             {getDisplayText()}
           </p>
         </div>
-        <ChevronDown size={18} className={css({ color: "#64748b", transform: isOpen ? "rotate(180deg)" : "none", transition: "transform 0.2s" })} />
+        <ChevronDown size={18} className={css({ color: "var(--secondary-text)", transform: isOpen ? "rotate(180deg)" : "none", transition: "transform 0.2s" })} />
       </div>
 
       {/* Dropdown Panel */}
@@ -121,11 +121,11 @@ export default function MultiSearchableSelect({
           top: "calc(100% + 4px)", 
           left: 0, 
           right: 0, 
-          bg: "white", 
+          bg: "var(--card-bg)", 
           borderRadius: "18px", 
           shadow: "0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1)", 
           border: "1px solid", 
-          borderColor: "#e2e8f0", 
+          borderColor: "var(--border-color)", 
           zIndex: 9999, 
           p: "8px",
           gap: "4px",
@@ -133,14 +133,14 @@ export default function MultiSearchableSelect({
           overflow: "visible"
         })}>
           {/* Search Input inside dropdown */}
-          <div className={flex({ align: "center", gap: "10px", px: "12px", py: "10px", bg: "#f8fafc", borderRadius: "12px", mb: "4px" })}>
-            <Search size={16} className={css({ color: "#94a3b8" })} />
+          <div className={flex({ align: "center", gap: "10px", px: "12px", py: "10px", bg: "var(--surface-secondary)", borderRadius: "12px", mb: "4px" })}>
+            <Search size={16} className={css({ color: "var(--secondary-text)" })} />
             <input 
               autoFocus
               placeholder="Поиск..."
               value={searchValue}
               onChange={(e) => setSearchValue(e.target.value)}
-              className={css({ bg: "transparent", border: "none", outline: "none", fontSize: "16px", w: "full", color: "#000" })}
+              className={css({ bg: "transparent", border: "none", outline: "none", fontSize: "16px", w: "full", color: "var(--foreground)" })}
             />
           </div>
 
@@ -164,16 +164,16 @@ export default function MultiSearchableSelect({
                       borderRadius: "10px", 
                       cursor: "pointer", 
                       WebkitTapHighlightColor: "transparent",
-                      _hover: { bg: "#f1f5f9" },
-                      _active: { bg: "#e2e8f0" },
-                      bg: isSelected ? "#f0fdf4" : "transparent"
+                      _hover: { bg: "var(--surface-secondary)" },
+                      _active: { bg: "var(--border-color)" },
+                      bg: isSelected ? "rgba(33, 160, 56, 0.1)" : "transparent"
                     })}
                   >
                     <div className={flex({ align: "center", gap: "12px" })}>
                       <div className={css({ 
                         w: "18px", h: "18px", borderRadius: "6px", border: "2px solid", 
-                        borderColor: isSelected ? "sberGreen" : "#cbd5e1",
-                        bg: isSelected ? "sberGreen" : "white",
+                        borderColor: isSelected ? "var(--sber-green)" : "var(--border-color)",
+                        bg: isSelected ? "var(--sber-green)" : "transparent",
                         display: "flex", alignItems: "center", justifyContent: "center"
                       })}>
                         {isSelected && <Check size={12} color="white" strokeWidth={3} />}
@@ -181,7 +181,7 @@ export default function MultiSearchableSelect({
                       <span className={css({ 
                         fontSize: "13px", 
                         fontWeight: isSelected ? "700" : "500",
-                        color: isSelected ? "sberGreen" : "#334155" 
+                        color: isSelected ? "var(--sber-green)" : "var(--foreground)" 
                       })}>
                         {opt.label}
                       </span>
@@ -190,7 +190,7 @@ export default function MultiSearchableSelect({
                 )
               })
             ) : (
-              <div className={css({ py: "20px", textAlign: "center", color: "#94a3b8", fontSize: "13px" })}>
+              <div className={css({ py: "20px", textAlign: "center", color: "var(--secondary-text)", fontSize: "13px" })}>
                 Ничего не найдено
               </div>
             )}

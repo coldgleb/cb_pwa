@@ -26,6 +26,7 @@ export default async function TransactionsPage({
   const endDate = params.endDate as string || "";
   const bankId = params.bankId ? parseInt(params.bankId as string) : undefined;
   const cardId = params.cardId ? parseInt(params.cardId as string) : undefined;
+  const merchantName = params.merchantName as string || "";
 
   // Fetch options for filters
   const myCards = await db
@@ -45,6 +46,16 @@ export default async function TransactionsPage({
   const bankOptions = uniqueBanks.map(b => ({ value: b.id.toString(), label: b.name }));
   const cardOptions = myCards.map(c => ({ value: c.id.toString(), label: `${c.bankName} ${c.cardName}` }));
 
+  // Get unique merchants for this user
+  const userMerchants = await db
+    .select({ name: transactions.merchantName })
+    .from(transactions)
+    .where(eq(transactions.userId, session.user.id!))
+    .groupBy(transactions.merchantName)
+    .orderBy(asc(transactions.merchantName));
+  
+  const merchantOptions = userMerchants.map(m => ({ value: m.name, label: m.name }));
+
   // Build query with filters
   const conditions = [eq(transactions.userId, session.user.id!)];
   
@@ -55,6 +66,7 @@ export default async function TransactionsPage({
     conditions.push(lte(transactions.transactionDate, end));
   }
   if (cardId) conditions.push(eq(transactions.userCardId, cardId));
+  if (merchantName) conditions.push(eq(transactions.merchantName, merchantName));
   if (bankId) {
     const bankCardsIds = myCards.filter(c => c.bankId === bankId).map(c => c.id);
     if (bankCardsIds.length > 0) {
@@ -101,13 +113,13 @@ export default async function TransactionsPage({
   };
 
   return (
-    <div className={css({ minH: "100vh", bg: "#f4f4f4" })}>
+    <div className={css({ minH: "100vh", bg: "var(--background)" })}>
       <div className="sber-container">
         <header className={stack({ gap: "4px", mb: "32px" })}>
           <a href="/" className="sber-icon-button">
             <ArrowLeft size={20} />
           </a>
-          <h1 className={css({ fontSize: "24px", fontWeight: "800", color: "#000" })}>История</h1>
+          <h1 className={css({ fontSize: "24px", fontWeight: "800", color: "var(--foreground)" })}>История</h1>
         </header>
 
         {/* Filters */}
@@ -145,11 +157,21 @@ export default async function TransactionsPage({
               </div>
             </div>
 
+            <div className={stack({ gap: "4px" })}>
+              <label className="sber-label">МАГАЗИН</label>
+              <SearchableSelect 
+                name="merchantName" 
+                options={merchantOptions}
+                defaultValue={merchantName}
+                placeholder="Все магазины"
+              />
+            </div>
+
             <div className={flex({ gap: "8px" })}>
               <button type="submit" className="sber-button" style={{ flex: 1, padding: "12px" }}>
                 <Filter size={16} /> Применить
               </button>
-              <a href="/transactions" className={css({ p: "12px", bg: "#f1f5f9", borderRadius: "14px", color: "#64748b", display: "flex", alignItems: "center", justifyContent: "center" })}>
+              <a href="/transactions" className={css({ p: "12px", bg: "var(--input-bg)", borderRadius: "14px", color: "#64748b", display: "flex", alignItems: "center", justifyContent: "center" })}>
                 <X size={18} />
               </a>
             </div>
@@ -162,7 +184,7 @@ export default async function TransactionsPage({
 
         <div className={stack({ gap: "12px" })}>
           {history.length === 0 ? (
-            <div className={css({ py: "80px", textAlign: "center", color: "secondaryText", bg: "white", borderRadius: "24px", border: "1px dashed", borderColor: "#e2e8f0" })}>
+            <div className={css({ py: "80px", textAlign: "center", color: "secondaryText", bg: "var(--card-bg)", borderRadius: "24px", border: "1px dashed", borderColor: "#e2e8f0" })}>
               <p className={css({ fontSize: "15px", fontWeight: "600" })}>Покупки не найдены</p>
             </div>
           ) : (
@@ -173,7 +195,7 @@ export default async function TransactionsPage({
 
               return (
                 <div key={item.id} className="sber-card" style={{ padding: '16px', display: 'flex', alignItems: 'center', gap: '16px' }}>
-                  <div className={css({ w: "52px", h: "52px", borderRadius: "16px", bg: "#f8fafc", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid", borderColor: "#f1f5f9", overflow: "hidden" })}>
+                  <div className={css({ w: "52px", h: "52px", borderRadius: "16px", bg: "var(--surface-secondary)", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid", borderColor: "var(--border-color)", overflow: "hidden" })}>
                     {merchantIcon ? (
                       <img src={merchantIcon} alt={item.merchantName} className={css({ w: "full", h: "full", objectFit: "contain", p: "4px" })} />
                     ) : (
@@ -183,7 +205,7 @@ export default async function TransactionsPage({
                     )}
                   </div>
                   <div className={stack({ gap: "0", flex: "1" })}>
-                    <p className={css({ fontWeight: "800", fontSize: "16px", color: "#000" })}>{item.merchantName}</p>
+                    <p className={css({ fontWeight: "800", fontSize: "16px", color: "var(--foreground)" })}>{item.merchantName}</p>
                     <p className={css({ fontSize: "13px", color: "secondaryText", fontWeight: "500" })}>
                       {item.bankName} {item.cardName}
                     </p>
@@ -199,7 +221,7 @@ export default async function TransactionsPage({
                   </div>
                   <div className={stack({ align: "end", gap: "8px" })}>
                     <div className={stack({ align: "end", gap: "2px" })}>
-                      <p className={css({ fontWeight: "900", fontSize: "17px", color: "#000" })}>
+                      <p className={css({ fontWeight: "900", fontSize: "17px", color: "var(--foreground)" })}>
                         {item.amount.toFixed(2)}₽
                       </p>
                       {isSplit && (
@@ -207,20 +229,36 @@ export default async function TransactionsPage({
                           ЧЕК: {item.paidAmount?.toFixed(2)}₽
                         </p>
                       )}
-                      {totalCashback > 0 && (
-                        <div className={flex({ align: "center", gap: "4px" })}>
-                          <span className={css({ fontSize: "10px", fontWeight: "800", color: "#94a3b8" })}>
-                            {((item.cashback || 0) / (item.paidAmount || item.amount) * 100).toFixed(0)}%
-                          </span>
-                          <div className={css({ px: "8px", py: "2px", bg: "#f0fdf4", color: "sberGreen", borderRadius: "8px", fontSize: "12px", fontWeight: "900" })}>
-                            +{totalCashback.toFixed(2)}
+                      <div className={flex({ align: "center", gap: "6px", mt: "2px" })}>
+                        {item.manualAdjustment !== 0 && (
+                          <div className={css({ 
+                            px: "8px", 
+                            py: "2px", 
+                            bg: item.manualAdjustment > 0 ? "rgba(254, 252, 232, 0.1)" : "rgba(254, 242, 242, 0.1)", 
+                            color: item.manualAdjustment > 0 ? "#eab308" : "#ef4444", 
+                            borderRadius: "8px", 
+                            fontSize: "12px", 
+                            fontWeight: "900" 
+                          })}>
+                            {item.manualAdjustment > 0 ? `+${item.manualAdjustment.toFixed(2)}` : item.manualAdjustment.toFixed(2)}
                           </div>
-                        </div>
-                      )}
+                        )}
+
+                        {item.cashback !== null && item.cashback > 0 && (
+                          <div className={flex({ align: "center", gap: "4px" })}>
+                            <span className={css({ fontSize: "10px", fontWeight: "800", color: "#94a3b8" })}>
+                              {((item.cashback || 0) / (item.paidAmount || item.amount) * 100).toFixed(0)}%
+                            </span>
+                            <div className={css({ px: "8px", py: "2px", bg: "rgba(33, 160, 56, 0.1)", color: "var(--sber-green)", borderRadius: "8px", fontSize: "12px", fontWeight: "900" })}>
+                              +{item.cashback.toFixed(2)}
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
                     
                     <div className={flex({ gap: "8px" })}>
-                      <a href={`/transactions/${item.id}/edit`} className={css({ color: "#64748b", p: "4px", _hover: { color: "sberGreen" } })}>
+                      <a href={`/transactions/${item.id}/edit`} className={css({ color: "#64748b", p: "4px", _hover: { color: "var(--sber-green)" } })}>
                         <Edit2 size={16} />
                       </a>
                       <form action={deleteTransaction.bind(null, item.id)}>

@@ -17,17 +17,17 @@ export default function CategoryActions({
   const { toast } = useToast();
 
   return (
-    <div className={flex({ gap: "8px", mt: "12px" })}>
+    <div className={flex({ gap: "8px", mt: "12px", wrap: "wrap" })}>
       {!isAllPurchases && (
-        <div className={flex({ gap: "8px", flex: 1 })}>
+        <div className={flex({ gap: "8px", flex: "1 1 100%", wrap: "wrap" })}>
           <a 
             href={`/admin/categories/${categoryId}/composition`}
-            className={flex({ align: "center", gap: "8px", flex: 1, justify: "center", py: "10px", bg: "white", borderRadius: "12px", fontSize: "12px", fontWeight: "700", color: "#64748b", border: "1px solid", borderColor: "#f1f5f9", _hover: { bg: "#f1f5f9" } })}
+            className={flex({ align: "center", gap: "8px", flex: "1 1 200px", justify: "center", py: "10px", bg: "var(--card-bg)", borderRadius: "12px", fontSize: "12px", fontWeight: "700", color: "var(--secondary-text)", border: "1px solid", borderColor: "var(--border-color)", _hover: { bg: "var(--surface-secondary)" } })}
           >
             <Tag size={14} /> УПРАВЛЯТЬ СОСТАВОМ
           </a>
           {!isSystem && (
-            <div className={flex({ gap: "8px" })}>
+            <div className={flex({ gap: "8px", flex: "0 0 auto" })}>
               <form action={async () => {
                 try {
                   await duplicateBankCategory(categoryId);
@@ -39,7 +39,7 @@ export default function CategoryActions({
                 <button 
                   type="submit"
                   title="Дублировать категорию (как новую с сегодня)"
-                  className={flex({ align: "center", justify: "center", w: "40px", h: "40px", bg: "white", borderRadius: "12px", color: "#64748b", border: "1px solid", borderColor: "#f1f5f9", cursor: "pointer", _hover: { bg: "#f1f5f9" } })}
+                  className={flex({ align: "center", justify: "center", w: "40px", h: "40px", bg: "var(--card-bg)", borderRadius: "12px", color: "var(--secondary-text)", border: "1px solid", borderColor: "var(--border-color)", cursor: "pointer", _hover: { bg: "var(--surface-secondary)" } })}
                 >
                   <Copy size={16} />
                 </button>
@@ -58,7 +58,7 @@ export default function CategoryActions({
                 <button 
                   type="submit"
                   title="Удалить категорию"
-                  className={flex({ align: "center", justify: "center", w: "40px", h: "40px", bg: "white", borderRadius: "12px", color: "#ef4444", border: "1px solid", borderColor: "#fee2e2", cursor: "pointer", _hover: { bg: "#fef2f2" } })}
+                  className={flex({ align: "center", justify: "center", w: "40px", h: "40px", bg: "var(--card-bg)", borderRadius: "12px", color: "#ef4444", border: "1px solid", borderColor: "var(--border-color)", cursor: "pointer", _hover: { bg: "rgba(239, 68, 68, 0.1)", borderColor: "#ef4444" } })}
                 >
                   <Trash2 size={16} />
                 </button>

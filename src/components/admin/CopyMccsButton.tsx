@@ -27,7 +27,7 @@ export default function CopyMccsButton({ mccs }: { mccs: string }) {
         gap: "6px", 
         px: "10px", 
         py: "6px", 
-        bg: "white", 
+        bg: "var(--card-bg)", 
         border: "1px solid", 
         borderColor: "#e2e8f0", 
         borderRadius: "10px",

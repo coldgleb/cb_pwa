@@ -30,13 +30,13 @@ export default async function NewTransactionPage() {
   const allMerchants = await db.select().from(merchants).orderBy(asc(merchants.name));
 
   return (
-    <div className={css({ minH: "100vh", bg: "#f4f4f4" })}>
+    <div className={css({ minH: "100vh", bg: "var(--background)" })}>
       <div className="sber-container">
         <header className={stack({ gap: "4px", mb: "32px" })}>
           <a href="/" className="sber-icon-button">
             <ArrowLeft size={20} />
           </a>
-          <h1 className={css({ fontSize: "24px", fontWeight: "800", color: "#000" })}>Покупка</h1>
+          <h1 className={css({ fontSize: "24px", fontWeight: "800", color: "var(--foreground)" })}>Покупка</h1>
         </header>
 
         <div className={stack({ gap: "40px" })}>

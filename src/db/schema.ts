@@ -60,7 +60,7 @@ export const verificationTokens = sqliteTable(
 
 export const banks = sqliteTable("banks", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  name: text("name").notNull(),
+  name: text("name").notNull().unique(),
   logo: text("logo"),
   website: text("website"),
 });

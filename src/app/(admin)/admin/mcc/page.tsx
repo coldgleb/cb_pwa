@@ -12,10 +12,10 @@ export default async function MccPage() {
   return (
     <div className={stack({ gap: "32px" })}>
       <div className={flex({ justify: "space-between", align: "center" })}>
-        <h1 className={css({ fontSize: "24px", fontWeight: "800", color: "#000" })}>MCC коды</h1>
+        <h1 className={css({ fontSize: "24px", fontWeight: "800", color: "var(--foreground)" })}>MCC коды</h1>
         
         <form action={syncMccCodes}>
-          <button type="submit" className={flex({ align: "center", gap: "8px", px: "16px", py: "10px", bg: "white", border: "1px solid", borderColor: "#e2e8f0", borderRadius: "12px", fontSize: "13px", fontWeight: "700", color: "#64748b", cursor: "pointer", transition: "all 0.2s", _hover: { bg: "#f8fafc", borderColor: "sberGreen", color: "sberGreen" } })}>
+          <button type="submit" className={flex({ align: "center", gap: "8px", px: "16px", py: "10px", bg: "var(--card-bg)", border: "1px solid", borderColor: "#e2e8f0", borderRadius: "12px", fontSize: "13px", fontWeight: "700", color: "#64748b", cursor: "pointer", transition: "all 0.2s", _hover: { bg: "#f8fafc", borderColor: "sberGreen", color: "sberGreen" } })}>
             <RefreshCw size={14} /> СИНХРОНИЗИРОВАТЬ
           </button>
         </form>
@@ -28,7 +28,7 @@ export default async function MccPage() {
             <div className={css({ p: "6px", bg: "sberGreen", borderRadius: "8px", color: "white" })}>
               <Plus size={18} />
             </div>
-            <h2 className={css({ fontSize: "17px", fontWeight: "700", color: "#000" })}>Новый MCC код</h2>
+            <h2 className={css({ fontSize: "17px", fontWeight: "700", color: "var(--foreground)" })}>Новый MCC код</h2>
           </div>
 
           <form action={createMccCode} className={stack({ gap: "20px" })}>
@@ -69,10 +69,10 @@ export default async function MccPage() {
         </section>
 
         {/* Статистика/Инфо */}
-        <section className="sber-card" style={{ height: "fit-content", background: "linear-gradient(135deg, #f0fdf4 0%, #ffffff 100%)" }}>
+        <section className="sber-card" style={{ height: "fit-content", background: "var(--surface-secondary)" }}>
            <div className={flex({ align: "center", gap: "10px", mb: "16px" })}>
             <Tag size={18} className={css({ color: "sberGreen" })} />
-            <h2 className={css({ fontSize: "17px", fontWeight: "700", color: "#000" })}>Информация</h2>
+            <h2 className={css({ fontSize: "17px", fontWeight: "700", color: "var(--foreground)" })}>Информация</h2>
           </div>
           <p className={css({ fontSize: "14px", color: "#475569", lineHeight: "1.6" })}>
             Всего в базе: <strong>{allMcc.length}</strong> кодов.
@@ -93,7 +93,7 @@ export default async function MccPage() {
                 {mcc.code}
               </div>
               <div className={stack({ gap: "0", flex: "1", overflow: "hidden" })}>
-                <p className={css({ fontWeight: "700", fontSize: "14px", color: "#000", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" })} title={mcc.description}>
+                <p className={css({ fontWeight: "700", fontSize: "14px", color: "var(--foreground)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" })} title={mcc.description}>
                   {mcc.description}
                 </p>
                 <p className={css({ fontSize: "10px", color: "secondaryText", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" })} title={mcc.fullDescription}>
@@ -103,7 +103,7 @@ export default async function MccPage() {
             </div>
           ))}
           {allMcc.length === 0 && (
-            <div className={css({ gridColumn: "1/-1", py: "40px", textAlign: "center", color: "secondaryText", bg: "white", borderRadius: "24px" })}>
+            <div className={css({ gridColumn: "1/-1", py: "40px", textAlign: "center", color: "secondaryText", bg: "var(--card-bg)", borderRadius: "24px" })}>
               Справочник пуст
             </div>
           )}
