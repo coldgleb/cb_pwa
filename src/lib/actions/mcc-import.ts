@@ -70,11 +70,33 @@ export async function fetchMccCategoriesFromUrl(url: string): Promise<MccCategor
       if (!nameMatch) continue;
       
       const fullHeader = nameMatch[1].replace(/<[^>]+>/g, " ").trim();
-      if (!fullHeader || fullHeader === "Без кешбэка") continue;
+      if (!fullHeader) continue;
 
       const percentMatch = fullHeader.match(/\((\d+)%\)/);
       const name = fullHeader.replace(/\(\d+%\)/, "").trim();
       const percent = percentMatch ? parseInt(percentMatch[1]) : undefined;
+
+      // Special handling for "No Cashback" categories in the list
+      if (/Без кешбэка|Нет кэшбэка/i.test(name)) {
+        if (!categories.some(c => /Без кешбэка|Нет кэшбэка/i.test(c.name))) {
+          const mccs = new Set<string>();
+          const searchMccMatch = blockContent.match(/href="[^"]*?m=([\d,]+)"/);
+          if (searchMccMatch) {
+            searchMccMatch[1].split(",").forEach(m => {
+              const trimmed = m.trim();
+              if (trimmed.length === 4) mccs.add(trimmed);
+            });
+          }
+          if (mccs.size > 0) {
+            categories.push({
+              name: "Без кешбэка",
+              mccs: Array.from(mccs).sort(),
+              minPercent: 0
+            });
+          }
+        }
+        continue;
+      }
       
       const mccs = new Set<string>();
       
@@ -204,8 +226,8 @@ export async function importFullCardFromUrl(bankCardId: number, url: string, sel
     // 1. Skip categories like "1% на все покупки"
     if (/на все покупки/i.test(cat.name)) continue;
 
-    // 2. Handle "Нет кэшбэка" -> "Без кешбэка"
-    if (/Нет кэшбэка/i.test(cat.name)) {
+    // 2. Handle "Нет кэшбэка" or "Без кешбэка" -> map to existing "Без кешбэка"
+    if (/Нет кэшбэка|Без кешбэка/i.test(cat.name)) {
       const [noCashbackCat] = await db
         .select({ id: bankCategories.id })
         .from(bankCategories)
