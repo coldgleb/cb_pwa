@@ -214,6 +214,17 @@ export default async function TransactionsPage({
                         {item.bankName} {item.cardName}
                       </p>
                     </div>
+                    {totalCashback !== 0 && (
+                      <div className={css({ 
+                        fontSize: "15px", 
+                        fontWeight: "900", 
+                        color: totalCashback > 0 ? "var(--sber-green)" : "#ef4444",
+                        textAlign: "right",
+                        flexShrink: 0
+                      })}>
+                        {totalCashback.toFixed(2)}₽
+                      </div>
+                    )}
                   </div>
 
                   <div className={stack({ gap: "8px" })}>
