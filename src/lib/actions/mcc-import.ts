@@ -43,10 +43,15 @@ export async function fetchMccCategoriesFromUrl(url: string): Promise<MccCategor
         mccs.add(codeMatch[1]);
       }
       
-      const plainCodeRegex = /(?:^|[^0-9])([0-9]{4})(?![0-9])/g;
+      // Improved regex to avoid years in dates (like .2025)
+      const plainCodeRegex = /(?:^|[^0-9.])([0-9]{4})(?![0-9])/g;
       let plainMatch;
       while ((plainMatch = plainCodeRegex.exec(sectionHtml.replace(/<[^>]+>/g, " "))) !== null) {
-        mccs.add(plainMatch[1]);
+        const code = plainMatch[1];
+        // Exclude common years from plain text extraction (2000-2100)
+        const numericCode = parseInt(code);
+        if (numericCode >= 2000 && numericCode <= 2100) continue;
+        mccs.add(code);
       }
 
       if (mccs.size > 0) {
@@ -156,10 +161,13 @@ export async function fetchMccCategoriesFromUrl(url: string): Promise<MccCategor
         const next = headers[i + 1];
         const sectionText = cleanHtml.slice(current.index, next ? next.index : cleanHtml.length);
         const mccsSet = new Set<string>();
-        const individualRegex = /(?:^|[^0-9])([0-9]{4})(?![0-9])/g;
+        const individualRegex = /(?:^|[^0-9.])([0-9]{4})(?![0-9])/g;
         let indMatch;
         while ((indMatch = individualRegex.exec(sectionText)) !== null) {
-          mccsSet.add(indMatch[1]);
+          const code = indMatch[1];
+          const numericCode = parseInt(code);
+          if (numericCode >= 2000 && numericCode <= 2100) continue;
+          mccsSet.add(code);
         }
         if (mccsSet.size > 0) {
           categories.push({

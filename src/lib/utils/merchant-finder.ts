@@ -10,8 +10,19 @@ export async function findMccForMerchant(merchantName: string) {
     
     const html = await response.text();
     
-    // Find all 4-digit numbers in the HTML
-    const potentialCodes = html.match(/\b\d{4}\b/g) || [];
+    // Find all MCC codes linked via /code/XXXX pattern
+    const codeLinkRegex = /\/code\/(\d{4})/g;
+    const potentialCodes: string[] = [];
+    let match;
+    while ((match = codeLinkRegex.exec(html)) !== null) {
+      const code = match[1];
+      // Still exclude years just in case
+      const numeric = parseInt(code);
+      if (!(numeric >= 2000 && numeric <= 2100)) {
+        potentialCodes.push(code);
+      }
+    }
+
     if (potentialCodes.length === 0) return null;
 
     // Filter codes that actually exist in our local database

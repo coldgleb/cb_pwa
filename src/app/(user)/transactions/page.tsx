@@ -130,7 +130,7 @@ export default async function TransactionsPage({
         {/* Filters */}
         <section className="sber-card" style={{ marginBottom: "24px", padding: "16px" }}>
           <form method="get" className={stack({ gap: "16px" })}>
-            <div className={grid({ columns: { base: 1, md: 2, lg: 3 }, gap: "16px" })}>
+            <div className={css({ display: "grid", gridTemplateColumns: { base: "1fr", md: "repeat(auto-fit, minmax(240px, 1fr))" }, gap: "16px" })}>
               <div className={flex({ gap: "10px" })}>
                 <div className={stack({ gap: "4px", flex: "1" })}>
                   <label className="sber-label">ОТ</label>
@@ -185,7 +185,7 @@ export default async function TransactionsPage({
           </form>
         </section>
 
-        <div className={grid({ columns: { base: 1, md: 2, lg: 3 }, gap: "12px" })}>
+        <div className={css({ display: "grid", gridTemplateColumns: { base: "1fr", md: "repeat(auto-fill, minmax(320px, 1fr))" }, gap: "12px" })}>
           {history.length === 0 ? (
             <div className={css({ gridColumn: "1/-1", py: "80px", textAlign: "center", color: "secondaryText", bg: "var(--card-bg)", borderRadius: "24px", border: "1px dashed", borderColor: "#e2e8f0" })}>
               <p className={css({ fontSize: "15px", fontWeight: "600" })}>Покупки не найдены</p>

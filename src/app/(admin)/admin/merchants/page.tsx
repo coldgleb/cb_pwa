@@ -9,6 +9,7 @@ import SearchableSelect from "@/components/SearchableSelect";
 import { getIconUrl } from "@/lib/utils/icons";
 import FindWebsiteButtonWrapper from "@/components/admin/FindWebsiteButtonWrapper";
 import DeleteMerchantButton from "@/components/admin/DeleteMerchantButton";
+import MerchantFormWrapper from "@/components/admin/MerchantFormWrapper";
 
 export default async function MerchantsPage() {
   const allMerchants = await db.select().from(merchants).orderBy(asc(merchants.name));
@@ -39,7 +40,7 @@ export default async function MerchantsPage() {
           <h2 className={css({ fontSize: "17px", fontWeight: "700", color: "var(--foreground)" })}>Новый мерчант</h2>
         </div>
 
-        <form action={createMerchant} className={stack({ gap: "20px" })}>
+        <MerchantFormWrapper action={createMerchant} successMessage="Мерчант успешно добавлен" className={stack({ gap: "20px" })}>
           <div className={stack({ gap: "6px" })}>
             <label className="sber-label">НАЗВАНИЕ ТОРГОВОЙ ТОЧКИ</label>
             <input
@@ -99,7 +100,7 @@ export default async function MerchantsPage() {
           <button type="submit" className="sber-button">
             Добавить мерчанта
           </button>
-        </form>
+        </MerchantFormWrapper>
       </section>
 
       {/* Список мерчантов */}
@@ -110,7 +111,7 @@ export default async function MerchantsPage() {
             const icon = getIconUrl(merchant);
             return (
               <div key={merchant.id} className="sber-card" style={{ padding: '16px' }}>
-                <form action={updateMerchant.bind(null, merchant.id)} className={stack({ gap: "16px" })}>
+                <MerchantFormWrapper action={updateMerchant.bind(null, merchant.id)} successMessage="Данные мерчанта обновлены" className={stack({ gap: "16px" })}>
                   <div className={flex({ justify: "space-between", align: "start", gap: "12px" })}>
                     <div className={flex({ align: "center", gap: "12px", flex: 1, minW: 0 })}>
                       <div className={css({ w: "48px", h: "48px", bg: "#f8fafc", borderRadius: "12px", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", border: "1px solid", borderColor: "#f1f5f9", flexShrink: 0 })}>
@@ -174,7 +175,7 @@ export default async function MerchantsPage() {
                       className={css({ fontSize: "12px", color: "var(--foreground)", bg: "var(--input-bg)", px: "8px", py: "4px", borderRadius: "8px", border: "none", width: "full", _focus: { outline: "none", ring: "1px solid gray" } })}
                     />
                   </div>
-                </form>
+                </MerchantFormWrapper>
                 
                 <div className={flex({ justify: "flex-end", mt: "12px" })}>
                    <DeleteMerchantButton merchantId={merchant.id} merchantName={merchant.name} />
