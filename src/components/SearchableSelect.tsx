@@ -122,24 +122,36 @@ export default function SearchableSelect({
       {/* Dropdown Panel */}
       {isOpen && (
         <div className={stack({ 
-          position: "absolute", 
-          top: "calc(100% + 4px)", 
+          position: { base: "fixed", md: "absolute" },
+          bottom: { base: 0, md: "auto" },
+          top: { base: "auto", md: "calc(100% + 4px)" },
           left: 0, 
           right: 0, 
           bg: "var(--card-bg)", 
-          borderRadius: "18px", 
-          shadow: "0 10px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.1)", 
+          borderRadius: { base: "24px 24px 0 0", md: "18px" },
+          shadow: "0 -10px 25px rgba(0, 0, 0, 0.2), 0 10px 25px -5px rgba(0, 0, 0, 0.2)", 
           border: "1px solid", 
           borderColor: "var(--border-color)", 
           zIndex: 10000, 
-          p: "8px",
+          p: "12px",
           gap: "4px",
-          maxH: "260px",
-          overflow: "visible"
+          maxH: { base: "80vh", md: "320px" },
+          overflow: "hidden"
         })}>
+          {/* Mobile Handle */}
+          <div className={css({ 
+            display: { base: "block", md: "none" }, 
+            w: "40px", 
+            h: "4px", 
+            bg: "var(--border-color)", 
+            borderRadius: "full", 
+            mx: "auto", 
+            mb: "12px" 
+          })} />
+
           {/* Search Input inside dropdown */}
-          <div className={flex({ align: "center", gap: "10px", px: "12px", py: "10px", bg: "var(--surface-secondary)", borderRadius: "12px", mb: "4px" })}>
-            <Search size={16} className={css({ color: "var(--secondary-text)" })} />
+          <div className={flex({ align: "center", gap: "10px", px: "12px", py: { base: "14px", md: "10px" }, bg: "var(--surface-secondary)", borderRadius: "12px", mb: "8px" })}>
+            <Search size={18} className={css({ color: "var(--secondary-text)" })} />
             <input 
               autoFocus
               placeholder="Поиск..."
@@ -149,21 +161,22 @@ export default function SearchableSelect({
             />
           </div>
 
-          <div className={css({ overflowY: "auto", maxH: "180px", pr: "4px", WebkitOverflowScrolling: "touch" })}>
+          <div className={css({ 
+            overflowY: "auto", 
+            maxH: { base: "calc(80vh - 100px)", md: "220px" }, 
+            pr: "4px", 
+            WebkitOverflowScrolling: "touch" 
+          })}>
             {filteredOptions.length > 0 ? (
               filteredOptions.map((opt) => (
                 <div 
                   key={opt.value}
-                  onPointerDown={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    handleSelect(opt);
-                  }}
+                  onClick={() => handleSelect(opt)}
                   className={flex({ 
                     align: "center", 
                     justify: "space-between",
                     px: "12px", 
-                    py: "10px", 
+                    py: { base: "14px", md: "10px" }, 
                     borderRadius: "10px", 
                     cursor: "pointer", 
                     WebkitTapHighlightColor: "transparent",
@@ -173,28 +186,24 @@ export default function SearchableSelect({
                   })}
                 >
                   <span className={css({ 
-                    fontSize: "13px", 
+                    fontSize: "14px", 
                     fontWeight: currentSelection?.value === opt.value ? "700" : "500",
                     color: currentSelection?.value === opt.value ? "var(--sber-green)" : "var(--foreground)" 
                   })}>
                     {opt.label}
                   </span>
-                  {currentSelection?.value === opt.value && <Check size={14} className={css({ color: "var(--sber-green)" })} />}
+                  {currentSelection?.value === opt.value && <Check size={16} className={css({ color: "var(--sber-green)" })} />}
                 </div>
               ))
             ) : (
               searchValue && allowCustom ? (
                 <div 
-                  onPointerDown={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    handleSelect({ value: searchValue, label: searchValue });
-                  }}
+                  onClick={() => handleSelect({ value: searchValue, label: searchValue })}
                   className={flex({ 
                     align: "center", 
                     gap: "10px",
                     px: "12px", 
-                    py: "10px", 
+                    py: { base: "14px", md: "10px" }, 
                     borderRadius: "10px", 
                     cursor: "pointer", 
                     bg: "rgba(59, 130, 246, 0.1)",
@@ -202,11 +211,11 @@ export default function SearchableSelect({
                     _hover: { bg: "rgba(59, 130, 246, 0.2)" }
                   })}
                 >
-                  <Plus size={14} />
-                  <span className={css({ fontSize: "13px", fontWeight: "700" })}>Использовать &quot;{searchValue}&quot;</span>
+                  <Plus size={16} />
+                  <span className={css({ fontSize: "14px", fontWeight: "700" })}>Использовать &quot;{searchValue}&quot;</span>
                 </div>
               ) : (
-                <div className={css({ py: "20px", textAlign: "center", color: "var(--secondary-text)", fontSize: "13px" })}>
+                <div className={css({ py: "30px", textAlign: "center", color: "var(--secondary-text)", fontSize: "14px" })}>
                   Ничего не найдено
                 </div>
               )
