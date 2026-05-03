@@ -2,7 +2,7 @@ import { db } from "@/db";
 import { transactions, userCards, bankCards, banks, bankCategories, merchants } from "@/db/schema";
 import { auth } from "@/auth";
 import { css } from "../../../../styled-system/css";
-import { stack, container, flex } from "../../../../styled-system/patterns";
+import { stack, container, flex, grid, wrap } from "../../../../styled-system/patterns";
 import { eq, desc, and, gte, lte, inArray, asc } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { ArrowLeft, ShoppingCart, Utensils, Car, Coffee, Smartphone, Globe, Gift, HelpCircle, Filter, X, Store, PlusCircle } from "lucide-react";
@@ -114,77 +114,80 @@ export default async function TransactionsPage({
 
   return (
     <div className={css({ minH: "100vh", bg: "var(--background)" })}>
-      <div className="sber-container">
-        <header className={stack({ gap: "4px", mb: "32px" })}>
-          <a href="/" className="sber-icon-button">
-            <ArrowLeft size={20} />
+      <div className={container({ maxWidth: { base: "512px", lg: "1100px" }, px: "20px", py: "32px" })}>
+        <header className={flex({ justify: "space-between", align: "flex-start", mb: "32px", gap: "16px", flexDir: { base: "column", sm: "row" } })}>
+          <div className={stack({ gap: "4px" })}>
+            <a href="/" className="sber-icon-button">
+              <ArrowLeft size={20} />
+            </a>
+            <h1 className={css({ fontSize: "24px", fontWeight: "800", color: "var(--foreground)" })}>История</h1>
+          </div>
+          <a href="/transactions/new" className="sber-button" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", textDecoration: "none", width: "auto", minWidth: "180px" }}>
+            <PlusCircle size={20} /> Новая покупка
           </a>
-          <h1 className={css({ fontSize: "24px", fontWeight: "800", color: "var(--foreground)" })}>История</h1>
         </header>
 
         {/* Filters */}
         <section className="sber-card" style={{ marginBottom: "24px", padding: "16px" }}>
           <form method="get" className={stack({ gap: "16px" })}>
-            <div className={flex({ gap: "10px", wrap: "wrap" })}>
-              <div className={stack({ gap: "4px", flex: "1", minW: "140px" })}>
-                <label className="sber-label">ОТ</label>
-                <input type="date" name="startDate" defaultValue={startDate} className="sber-input" style={{ padding: "10px", fontSize: "13px" }} />
+            <div className={grid({ columns: { base: 1, md: 2, lg: 3 }, gap: "16px" })}>
+              <div className={flex({ gap: "10px" })}>
+                <div className={stack({ gap: "4px", flex: "1" })}>
+                  <label className="sber-label">ОТ</label>
+                  <input type="date" name="startDate" defaultValue={startDate} className="sber-input" style={{ padding: "10px", fontSize: "13px" }} />
+                </div>
+                <div className={stack({ gap: "4px", flex: "1" })}>
+                  <label className="sber-label">ДО</label>
+                  <input type="date" name="endDate" defaultValue={endDate} className="sber-input" style={{ padding: "10px", fontSize: "13px" }} />
+                </div>
               </div>
-              <div className={stack({ gap: "4px", flex: "1", minW: "140px" })}>
-                <label className="sber-label">ДО</label>
-                <input type="date" name="endDate" defaultValue={endDate} className="sber-input" style={{ padding: "10px", fontSize: "13px" }} />
-              </div>
-            </div>
 
-            <div className={flex({ gap: "10px", wrap: "wrap" })}>
-              <div className={stack({ gap: "4px", flex: "1", minW: "140px" })}>
-                <label className="sber-label">БАНК</label>
+              <div className={flex({ gap: "10px" })}>
+                <div className={stack({ gap: "4px", flex: "1" })}>
+                  <label className="sber-label">БАНК</label>
+                  <SearchableSelect 
+                    name="bankId" 
+                    options={bankOptions}
+                    defaultValue={bankId?.toString()}
+                    placeholder="Все банки"
+                  />
+                </div>
+                <div className={stack({ gap: "4px", flex: "1" })}>
+                  <label className="sber-label">КАРТА</label>
+                  <SearchableSelect 
+                    name="cardId" 
+                    options={cardOptions}
+                    defaultValue={cardId?.toString()}
+                    placeholder="Все карты"
+                  />
+                </div>
+              </div>
+
+              <div className={stack({ gap: "4px" })}>
+                <label className="sber-label">МАГАЗИН</label>
                 <SearchableSelect 
-                  name="bankId" 
-                  options={bankOptions}
-                  defaultValue={bankId?.toString()}
-                  placeholder="Все банки"
+                  name="merchantName" 
+                  options={merchantOptions}
+                  defaultValue={merchantName}
+                  placeholder="Все магазины"
                 />
               </div>
-              <div className={stack({ gap: "4px", flex: "1", minW: "140px" })}>
-                <label className="sber-label">КАРТА</label>
-                <SearchableSelect 
-                  name="cardId" 
-                  options={cardOptions}
-                  defaultValue={cardId?.toString()}
-                  placeholder="Все карты"
-                />
-              </div>
             </div>
 
-            <div className={stack({ gap: "4px" })}>
-              <label className="sber-label">МАГАЗИН</label>
-              <SearchableSelect 
-                name="merchantName" 
-                options={merchantOptions}
-                defaultValue={merchantName}
-                placeholder="Все магазины"
-              />
-            </div>
-
-            <div className={flex({ gap: "8px" })}>
-              <button type="submit" className="sber-button" style={{ flex: 1, padding: "12px" }}>
-                <Filter size={16} /> Применить
-              </button>
-              <a href="/transactions" className={css({ p: "12px", bg: "var(--input-bg)", borderRadius: "14px", color: "#64748b", display: "flex", alignItems: "center", justifyContent: "center" })}>
+            <div className={flex({ gap: "8px", justify: "flex-end" })}>
+              <a href="/transactions" className={css({ p: "12px", bg: "var(--input-bg)", borderRadius: "14px", color: "#64748b", display: "flex", alignItems: "center", justifyContent: "center", _hover: { bg: "var(--border-color)" } })}>
                 <X size={18} />
               </a>
+              <button type="submit" className="sber-button" style={{ width: "auto", padding: "12px 24px" }}>
+                <Filter size={16} /> Применить
+              </button>
             </div>
           </form>
         </section>
 
-        <a href="/transactions/new" className="sber-button" style={{ marginBottom: "24px", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", textDecoration: "none" }}>
-          <PlusCircle size={20} /> Новая покупка
-        </a>
-
-        <div className={stack({ gap: "12px" })}>
+        <div className={grid({ columns: { base: 1, md: 2, lg: 3 }, gap: "12px" })}>
           {history.length === 0 ? (
-            <div className={css({ py: "80px", textAlign: "center", color: "secondaryText", bg: "var(--card-bg)", borderRadius: "24px", border: "1px dashed", borderColor: "#e2e8f0" })}>
+            <div className={css({ gridColumn: "1/-1", py: "80px", textAlign: "center", color: "secondaryText", bg: "var(--card-bg)", borderRadius: "24px", border: "1px dashed", borderColor: "#e2e8f0" })}>
               <p className={css({ fontSize: "15px", fontWeight: "600" })}>Покупки не найдены</p>
             </div>
           ) : (
@@ -194,75 +197,82 @@ export default async function TransactionsPage({
               const totalCashback = (item.cashback || 0) + (item.manualAdjustment || 0);
 
               return (
-                <div key={item.id} className="sber-card" style={{ padding: '16px', display: 'flex', alignItems: 'center', gap: '16px' }}>
-                  <div className={css({ w: "52px", h: "52px", borderRadius: "16px", bg: "var(--surface-secondary)", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid", borderColor: "var(--border-color)", overflow: "hidden" })}>
-                    {merchantIcon ? (
-                      <img src={merchantIcon} alt={item.merchantName} className={css({ w: "full", h: "full", objectFit: "contain", p: "4px" })} />
-                    ) : (
-                      <div className={css({ color: "#64748b" })}>
-                        {getCategoryIcon(item.categoryName)}
-                      </div>
-                    )}
-                  </div>
-                  <div className={stack({ gap: "0", flex: "1" })}>
-                    <p className={css({ fontWeight: "800", fontSize: "16px", color: "var(--foreground)" })}>{item.merchantName}</p>
-                    <p className={css({ fontSize: "13px", color: "secondaryText", fontWeight: "500" })}>
-                      {item.bankName} {item.cardName}
-                    </p>
-                    <div className={flex({ align: "center", gap: "6px", mt: "4px" })}>
-                      <span className={css({ fontSize: "11px", fontWeight: "800", color: "#94a3b8", textTransform: "uppercase" })}>
-                        {item.date?.toLocaleDateString('ru-RU')}
-                      </span>
-                      <span className={css({ w: "3px", h: "3px", bg: "#cbd5e1", borderRadius: "full" })} />
-                      <span className={css({ fontSize: "11px", fontWeight: "800", color: "sberGreen", textTransform: "uppercase" })}>
-                        {item.categoryName || 'Без категории'}
-                      </span>
-                    </div>
-                  </div>
-                  <div className={stack({ align: "end", gap: "8px" })}>
-                    <div className={stack({ align: "end", gap: "2px" })}>
-                      <p className={css({ fontWeight: "900", fontSize: "17px", color: "var(--foreground)" })}>
-                        {item.amount.toFixed(2)}₽
-                      </p>
-                      {isSplit && (
-                        <p className={css({ fontSize: "10px", color: "secondaryText", fontWeight: "700" })}>
-                          ЧЕК: {item.paidAmount?.toFixed(2)}₽
-                        </p>
+                <div key={item.id} className="sber-card" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px', justifyContent: 'space-between' }}>
+                  <div className={flex({ gap: "12px", align: "flex-start" })}>
+                    <div className={css({ w: "48px", h: "48px", borderRadius: "14px", bg: "var(--surface-secondary)", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid", borderColor: "var(--border-color)", overflow: "hidden", flexShrink: 0 })}>
+                      {merchantIcon ? (
+                        <img src={merchantIcon} alt={item.merchantName} className={css({ w: "full", h: "full", objectFit: "contain", p: "4px" })} />
+                      ) : (
+                        <div className={css({ color: "#64748b" })}>
+                          {getCategoryIcon(item.categoryName)}
+                        </div>
                       )}
-                      <div className={flex({ align: "center", gap: "6px", mt: "2px" })}>
-                        {item.manualAdjustment !== 0 && (
-                          <div className={css({ 
-                            px: "8px", 
-                            py: "2px", 
-                            bg: item.manualAdjustment > 0 ? "rgba(254, 252, 232, 0.1)" : "rgba(254, 242, 242, 0.1)", 
-                            color: item.manualAdjustment > 0 ? "#eab308" : "#ef4444", 
-                            borderRadius: "8px", 
-                            fontSize: "12px", 
-                            fontWeight: "900" 
-                          })}>
-                            {item.manualAdjustment > 0 ? `+${item.manualAdjustment.toFixed(2)}` : item.manualAdjustment.toFixed(2)}
-                          </div>
-                        )}
+                    </div>
+                    <div className={stack({ gap: "0", flex: "1", minW: 0 })}>
+                      <p className={css({ fontWeight: "800", fontSize: "15px", color: "var(--foreground)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" })} title={item.merchantName}>{item.merchantName}</p>
+                      <p className={css({ fontSize: "12px", color: "secondaryText", fontWeight: "500", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" })}>
+                        {item.bankName} {item.cardName}
+                      </p>
+                    </div>
+                  </div>
 
-                        {item.cashback !== null && item.cashback > 0 && (
-                          <div className={flex({ align: "center", gap: "4px" })}>
-                            <span className={css({ fontSize: "10px", fontWeight: "800", color: "#94a3b8" })}>
-                              {((item.cashback || 0) / (item.paidAmount || item.amount) * 100).toFixed(0)}%
-                            </span>
-                            <div className={css({ px: "8px", py: "2px", bg: "rgba(33, 160, 56, 0.1)", color: "var(--sber-green)", borderRadius: "8px", fontSize: "12px", fontWeight: "900" })}>
-                              +{item.cashback.toFixed(2)}
+                  <div className={stack({ gap: "8px" })}>
+                    <div className={flex({ justify: "space-between", align: "flex-end" })}>
+                      <div className={stack({ gap: "4px" })}>
+                        <div className={flex({ align: "center", gap: "6px" })}>
+                          <span className={css({ fontSize: "10px", fontWeight: "800", color: "#94a3b8", textTransform: "uppercase" })}>
+                            {item.date?.toLocaleDateString('ru-RU')}
+                          </span>
+                          <span className={css({ w: "3px", h: "3px", bg: "#cbd5e1", borderRadius: "full" })} />
+                          <span className={css({ fontSize: "10px", fontWeight: "800", color: "sberGreen", textTransform: "uppercase", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxW: "120px" })}>
+                            {item.categoryName || 'Без категории'}
+                          </span>
+                        </div>
+                        <div className={flex({ align: "center", gap: "6px" })}>
+                          {item.manualAdjustment !== 0 && (
+                            <div className={css({ 
+                              px: "6px", 
+                              py: "1px", 
+                              bg: item.manualAdjustment > 0 ? "rgba(254, 252, 232, 0.1)" : "rgba(254, 242, 242, 0.1)", 
+                              color: item.manualAdjustment > 0 ? "#eab308" : "#ef4444", 
+                              borderRadius: "6px", 
+                              fontSize: "11px", 
+                              fontWeight: "900" 
+                            })}>
+                              {item.manualAdjustment > 0 ? `+${item.manualAdjustment.toFixed(2)}` : item.manualAdjustment.toFixed(2)}
                             </div>
-                          </div>
+                          )}
+
+                          {item.cashback !== null && item.cashback > 0 && (
+                            <div className={flex({ align: "center", gap: "4px" })}>
+                              <span className={css({ fontSize: "10px", fontWeight: "800", color: "#94a3b8" })}>
+                                {((item.cashback || 0) / (item.paidAmount || item.amount) * 100).toFixed(0)}%
+                              </span>
+                              <div className={css({ px: "6px", py: "1px", bg: "rgba(33, 160, 56, 0.1)", color: "var(--sber-green)", borderRadius: "6px", fontSize: "11px", fontWeight: "900" })}>
+                                +{item.cashback.toFixed(2)}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <div className={stack({ align: "end", gap: "0" })}>
+                        <p className={css({ fontWeight: "900", fontSize: "18px", color: "var(--foreground)" })}>
+                          {item.amount.toFixed(2)}₽
+                        </p>
+                        {isSplit && (
+                          <p className={css({ fontSize: "10px", color: "secondaryText", fontWeight: "700" })}>
+                            ЧЕК: {item.paidAmount?.toFixed(2)}₽
+                          </p>
                         )}
                       </div>
                     </div>
-                    
-                    <div className={flex({ gap: "8px" })}>
-                      <a href={`/transactions/${item.id}/edit`} className={css({ color: "#64748b", p: "4px", _hover: { color: "var(--sber-green)" } })}>
+
+                    <div className={flex({ justify: "flex-end", gap: "4px", pt: "8px", borderTop: "1px solid", borderColor: "var(--separator)" })}>
+                      <a href={`/transactions/${item.id}/edit`} className={css({ color: "#64748b", p: "6px", borderRadius: "8px", _hover: { color: "var(--sber-green)", bg: "rgba(33, 160, 56, 0.05)" } })}>
                         <Edit2 size={16} />
                       </a>
                       <form action={deleteTransaction.bind(null, item.id)}>
-                        <button type="submit" className={css({ color: "#64748b", p: "4px", cursor: "pointer", _hover: { color: "#ef4444" } })}>
+                        <button type="submit" className={css({ color: "#64748b", p: "6px", cursor: "pointer", borderRadius: "8px", _hover: { color: "#ef4444", bg: "rgba(239, 68, 68, 0.05)" } })}>
                           <Trash2 size={16} />
                         </button>
                       </form>
