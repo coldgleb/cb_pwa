@@ -11,7 +11,9 @@ import {
   bankCategoryMerchant, 
   merchants, 
   userCashbackRules, 
-  bankExclusions 
+  bankExclusions,
+  users,
+  banks
 } from "@/db/schema";
 import { and, eq, lte, gte, sql, desc, or, isNull, inArray, asc } from "drizzle-orm";
 
@@ -689,11 +691,13 @@ export async function recalculateTransactions(txs: any[]) {
     }
   });
   console.log("Recalculation finished.");
+  return txs.length;
 }
 
 export async function recalculateTransactionsForUserCard(userCardId: number, startDate?: string, endDate?: string) {
   if (startDate && endDate) {
-      return bulkRecalculateTransactions(userCardId, startDate, endDate);
+      await bulkRecalculateTransactions(userCardId, startDate, endDate);
+      return 0; // bulkRecalculate doesn't easily return count without more changes
   }
 
   console.log(`Fetching transactions for UserCard ${userCardId}`);
@@ -713,7 +717,7 @@ export async function recalculateTransactionsForUserCard(userCardId: number, sta
 
   console.log(`Found ${allAffectedTransactions.length} transactions to recalculate.`);
 
-  await recalculateTransactions(allAffectedTransactions);
+  return await recalculateTransactions(allAffectedTransactions);
 }
 
 export async function recalculateTransactionsForMerchantNames(names: string[]) {
@@ -749,4 +753,20 @@ export async function recalculateTransactionsForBank(bankId: number) {
   for (const card of cards) {
     await recalculateTransactionsForBankCard(card.id);
   }
+}
+
+export async function getAllUserCards() {
+  return db
+    .select({
+      id: userCards.id,
+      userName: users.name,
+      userEmail: users.email,
+      cardName: bankCards.name,
+      bankName: banks.name,
+      txCount: sql<number>`(SELECT count(*) FROM ${transactions} WHERE ${transactions.userCardId} = ${userCards.id})`.mapWith(Number)
+    })
+    .from(userCards)
+    .innerJoin(users, eq(userCards.userId, users.id))
+    .innerJoin(bankCards, eq(userCards.bankCardId, bankCards.id))
+    .innerJoin(banks, eq(bankCards.bankId, banks.id));
 }
