@@ -257,7 +257,7 @@ export default async function TransactionsPage({
                           {item.cashback !== null && item.cashback > 0 && (
                             <div className={flex({ align: "center", gap: "4px" })}>
                               <span className={css({ fontSize: "10px", fontWeight: "800", color: "#94a3b8" })}>
-                                {((item.cashback || 0) / (item.paidAmount || item.amount) * 100).toFixed(0)}%
+                                {(item.cashback || 0).toFixed(0)}%
                               </span>
                               <div className={css({ px: "6px", py: "1px", bg: "rgba(33, 160, 56, 0.1)", color: "var(--sber-green)", borderRadius: "6px", fontSize: "11px", fontWeight: "900" })}>
                                 +{item.cashback.toFixed(2)}
