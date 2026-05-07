@@ -30,7 +30,7 @@ export async function createTransaction(formData: FormData) {
   // Ensure merchant exists and get its details
   await ensureMerchantExists(merchantName);
 
-  const { cashback, categoryId } = await calculateCashbackForTransaction(
+  const { cashback, categoryId, nominalPercentage } = await calculateCashbackForTransaction(
     paidAmount,
     mccCode,
     merchantName,
@@ -47,6 +47,7 @@ export async function createTransaction(formData: FormData) {
     merchantName,
     mccCode,
     calculatedCashback: cashback,
+    cashbackPercentage: nominalPercentage,
     manualCashbackAdjustment: manualAdjustment,
     categoryId,
   });
@@ -73,7 +74,7 @@ export async function updateTransaction(id: number, formData: FormData) {
   // Ensure merchant exists
   await ensureMerchantExists(merchantName);
 
-  const { cashback, categoryId } = await calculateCashbackForTransaction(
+  const { cashback, categoryId, nominalPercentage } = await calculateCashbackForTransaction(
     paidAmount,
     mccCode,
     merchantName,
@@ -91,6 +92,7 @@ export async function updateTransaction(id: number, formData: FormData) {
       merchantName,
       mccCode,
       calculatedCashback: cashback,
+      cashbackPercentage: nominalPercentage,
       manualCashbackAdjustment: manualAdjustment,
       categoryId,
     })

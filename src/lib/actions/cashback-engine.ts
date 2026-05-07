@@ -140,6 +140,7 @@ export async function bulkRecalculateTransactions(
 
     let finalCashback = 0;
     let finalCategoryId: number | null = null;
+    let finalPercentage = 0;
 
     // A. Check Exclusions
     const isExcluded = allExclusions.some(e => e.mccCode === normalizedMcc);
@@ -231,13 +232,18 @@ export async function bulkRecalculateTransactions(
             }
         }
 
+        finalPercentage = percentage;
+
         if (percentage > 0 || isOthers(category.name) || rule) {
           try {
             const parsedTiers = JSON.parse(tiers);
             if (Array.isArray(parsedTiers) && parsedTiers.length > 0) {
                 parsedTiers.sort((a: any, b: any) => b.minAmount - a.minAmount);
                 const matchedTier = parsedTiers.find((t: any) => paidAmount >= t.minAmount);
-                if (matchedTier) percentage = matchedTier.percentage;
+                if (matchedTier) {
+                  percentage = matchedTier.percentage;
+                  finalPercentage = percentage;
+                }
             }
           } catch(e) {}
 
@@ -276,6 +282,7 @@ export async function bulkRecalculateTransactions(
         }
       } else if (category && isNoCashback(category.name)) {
           finalCategoryId = category.id;
+          finalPercentage = 0;
       }
     }
 
@@ -284,13 +291,13 @@ export async function bulkRecalculateTransactions(
         // If we were NOT filtering, we update everything. 
         // If we ARE filtering, we only update specific categories.
         // HOWEVER, even if we filter, we must process the loop fully to track monthlyTotalCashback for limits!
-        results.push({ id: tx.id, cashback: finalCashback, categoryId: finalCategoryId });
+        results.push({ id: tx.id, cashback: finalCashback, categoryId: finalCategoryId, percentage: finalPercentage });
     } else if (onlyCategoryIds && !finalCategoryId && onlyCategoryIds.some(id => {
         const cat = allCategories.find(c => c.id === id);
         return cat && isOthers(cat.name);
     })) {
         // Also include fallback category in results if "Other purchases" was affected
-        results.push({ id: tx.id, cashback: finalCashback, categoryId: finalCategoryId });
+        results.push({ id: tx.id, cashback: finalCashback, categoryId: finalCategoryId, percentage: finalPercentage });
     }
   }
 
@@ -299,7 +306,11 @@ export async function bulkRecalculateTransactions(
     await db.transaction(async (dbTx) => {
       for (const res of results) {
         await dbTx.update(transactions)
-          .set({ calculatedCashback: res.cashback, categoryId: res.categoryId })
+          .set({ 
+            calculatedCashback: res.cashback, 
+            categoryId: res.categoryId,
+            cashbackPercentage: res.percentage
+          })
           .where(eq(transactions.id, res.id));
       }
     });
@@ -663,7 +674,7 @@ export async function recalculateTransactions(txs: any[]) {
         ? transactionData.transactionDate
         : new Date(transactionData.transactionDate));
         
-      const { cashback, categoryId } = await calculateCashbackForTransaction(
+      const { cashback, categoryId, nominalPercentage } = await calculateCashbackForTransaction(
         paid,
         transactionData.mccCode || "0000",
         transactionData.merchantName,
@@ -673,7 +684,7 @@ export async function recalculateTransactions(txs: any[]) {
       );
 
       await tx.update(transactions)
-        .set({ calculatedCashback: cashback, categoryId })
+        .set({ calculatedCashback: cashback, categoryId, cashbackPercentage: nominalPercentage })
         .where(eq(transactions.id, transactionData.id));
     }
   });

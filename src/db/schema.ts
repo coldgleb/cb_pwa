@@ -160,6 +160,7 @@ export const transactions = sqliteTable("transactions", {
   merchantName: text("merchant_name").notNull(),
   mccCode: text("mcc_code"),
   calculatedCashback: real("calculated_cashback"),
+  cashbackPercentage: real("cashback_percentage"),
   manualCashbackAdjustment: real("manual_cashback_adjustment").default(0).notNull(),
   categoryId: integer("category_id").references(() => bankCategories.id),
 });
