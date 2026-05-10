@@ -71,6 +71,7 @@ export const bankCards = sqliteTable("bank_cards", {
   name: text("name").notNull(),
   roundingType: text("rounding_type").default("no_rounding").notNull(),
   defaultCashbackLimit: real("default_cashback_limit"),
+  isArchived: integer("is_archived", { mode: "boolean" }).default(false),
 });
 
 // New table for historical settings

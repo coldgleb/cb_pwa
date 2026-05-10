@@ -70,6 +70,18 @@ export async function updateBankCard(id: number, formData: FormData) {
   revalidatePath(`/admin/bank-cards/${id}`);
 }
 
+export async function toggleBankCardArchive(id: number, isArchived: boolean) {
+  const session = await auth();
+  if (session?.user?.role !== "admin") throw new Error("Unauthorized");
+
+  await db.update(bankCards)
+    .set({ isArchived })
+    .where(eq(bankCards.id, id));
+
+  revalidatePath("/admin/bank-cards");
+  revalidatePath("/cards");
+}
+
 export async function deleteBankCard(id: number) {
   const session = await auth();
   if (session?.user?.role !== "admin") throw new Error("Unauthorized");

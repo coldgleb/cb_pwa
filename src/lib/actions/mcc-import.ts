@@ -79,7 +79,7 @@ export async function fetchMccCategoriesFromUrl(url: string): Promise<MccCategor
       if (!fullHeader) continue;
 
       const percentMatch = fullHeader.match(/\((\d+)%\)/);
-      const name = fullHeader.replace(/\(\d+%\)/, "").trim();
+      const name = fullHeader.replace(/\([^)]*%\)/g, "").trim();
       const percent = percentMatch ? parseInt(percentMatch[1]) : undefined;
 
       // Special handling for "No Cashback" categories in the list

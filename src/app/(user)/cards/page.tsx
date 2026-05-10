@@ -20,7 +20,10 @@ export default async function UserCardsPage() {
     id: bankCards.id,
     bankId: bankCards.bankId,
     name: bankCards.name,
-  }).from(bankCards).orderBy(asc(bankCards.name));
+  })
+  .from(bankCards)
+  .where(eq(bankCards.isArchived, false))
+  .orderBy(asc(bankCards.name));
 
   const myCards = await db.select({
     id: userCards.id,

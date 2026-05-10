@@ -134,7 +134,6 @@ export default async function EditBankCardPage({ params }: { params: Promise<{ i
               <form action={async (formData) => {
                 "use server";
                 await updateCardWithId(formData);
-                redirect("/admin/bank-cards");
               }} className={stack({ gap: "24px" })}>
                 <div className={stack({ gap: "8px" })}>
                   <label className="sber-label">БАНК</label>
