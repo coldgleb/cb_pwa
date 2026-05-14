@@ -13,6 +13,13 @@ import { getIconUrl } from "@/lib/utils/icons";
 
 export const dynamic = "force-dynamic";
 
+const formatUTCDate = (d: Date) => {
+  const day = String(d.getUTCDate()).padStart(2, '0');
+  const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const year = d.getUTCFullYear();
+  return `${day}.${month}.${year}`;
+};
+
 export default async function TransactionsPage({ 
   searchParams 
 }: { 
@@ -233,7 +240,7 @@ export default async function TransactionsPage({
                       <div className={stack({ gap: "4px" })}>
                         <div className={flex({ align: "center", gap: "6px" })}>
                           <span className={css({ fontSize: "10px", fontWeight: "800", color: "#94a3b8", textTransform: "uppercase" })}>
-                            {item.date?.toLocaleDateString('ru-RU')}
+                            {item.date ? formatUTCDate(new Date(item.date)) : ''}
                           </span>
                           <span className={css({ w: "3px", h: "3px", bg: "#cbd5e1", borderRadius: "full" })} />
                           <span className={css({ fontSize: "10px", fontWeight: "800", color: "sberGreen", textTransform: "uppercase", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxW: "120px" })}>
