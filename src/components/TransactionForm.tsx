@@ -45,6 +45,19 @@ interface TransactionFormProps {
   };
 }
 
+const getLocalDateString = (d: Date) => {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const getLocalTimeString = (d: Date) => {
+  const hours = String(d.getHours()).padStart(2, '0');
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+  return `${hours}:${minutes}`;
+};
+
 export default function TransactionForm({ cards, merchants, mccs, initialData }: TransactionFormProps) {
   const router = useRouter();
   const { toast } = useToast();
@@ -120,6 +133,14 @@ export default function TransactionForm({ cards, merchants, mccs, initialData }:
   };
 
   async function action(formData: FormData) {
+    const dateStr = formData.get("date") as string;
+    const timeStr = formData.get("time") as string;
+    if (dateStr && timeStr) {
+      // Create date in local timezone and convert to UTC ISO string
+      const localDate = new Date(`${dateStr}T${timeStr}`);
+      formData.append("transactionDateIso", localDate.toISOString());
+    }
+
     startTransition(async () => {
       try {
         if (initialData) {
@@ -300,7 +321,7 @@ export default function TransactionForm({ cards, merchants, mccs, initialData }:
             <input 
               name="date" 
               type="date" 
-              defaultValue={(initialData?.transactionDate || new Date()).toISOString().split('T')[0]} 
+              defaultValue={getLocalDateString(initialData?.transactionDate ? new Date(initialData.transactionDate) : new Date())} 
               className="sber-input" 
             />
           </div>
@@ -309,10 +330,7 @@ export default function TransactionForm({ cards, merchants, mccs, initialData }:
             <input 
               name="time" 
               type="time" 
-              defaultValue={initialData?.transactionDate 
-                ? new Date(initialData.transactionDate).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', hour12: false })
-                : new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', hour12: false })
-              } 
+              defaultValue={getLocalTimeString(initialData?.transactionDate ? new Date(initialData.transactionDate) : new Date())} 
               className="sber-input" 
             />
           </div>

@@ -20,8 +20,8 @@ export async function createTransaction(formData: FormData) {
   const merchantName = formData.get("merchantName") as string;
   const userCardId = parseInt(formData.get("userCardId") as string);
   const dateStr = formData.get("date") as string || new Date().toISOString().split('T')[0];
-  const timeStr = formData.get("time") as string || new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', hour12: false });
-  const transactionDate = new Date(`${dateStr}T${timeStr}`);
+  const transactionDateIso = formData.get("transactionDateIso") as string;
+  const transactionDate = transactionDateIso ? new Date(transactionDateIso) : new Date();
 
   if (isNaN(amount) || !merchantName || isNaN(userCardId)) {
     throw new Error("Invalid input data");
@@ -68,8 +68,8 @@ export async function updateTransaction(id: number, formData: FormData) {
   const merchantName = formData.get("merchantName") as string;
   const userCardId = parseInt(formData.get("userCardId") as string);
   const dateStr = formData.get("date") as string || new Date().toISOString().split('T')[0];
-  const timeStr = formData.get("time") as string || new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', hour12: false });
-  const transactionDate = new Date(`${dateStr}T${timeStr}`);
+  const transactionDateIso = formData.get("transactionDateIso") as string;
+  const transactionDate = transactionDateIso ? new Date(transactionDateIso) : new Date();
 
   // Ensure merchant exists
   await ensureMerchantExists(merchantName);
