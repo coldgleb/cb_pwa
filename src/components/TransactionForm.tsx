@@ -45,14 +45,16 @@ interface TransactionFormProps {
   };
 }
 
-const getLocalDateString = (d: Date) => {
+const formatDateForInput = (d: Date, isUTC: boolean) => {
+  if (isUTC) return d.toISOString().substring(0, 10);
   const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 };
 
-const getLocalTimeString = (d: Date) => {
+const formatTimeForInput = (d: Date, isUTC: boolean) => {
+  if (isUTC) return d.toISOString().substring(11, 16);
   const hours = String(d.getHours()).padStart(2, '0');
   const minutes = String(d.getMinutes()).padStart(2, '0');
   return `${hours}:${minutes}`;
@@ -136,9 +138,9 @@ export default function TransactionForm({ cards, merchants, mccs, initialData }:
     const dateStr = formData.get("date") as string;
     const timeStr = formData.get("time") as string;
     if (dateStr && timeStr) {
-      // Create date in local timezone and convert to UTC ISO string
-      const localDate = new Date(`${dateStr}T${timeStr}`);
-      formData.append("transactionDateIso", localDate.toISOString());
+      // Create date in absolute UTC time (floating time)
+      const utcDate = new Date(`${dateStr}T${timeStr}Z`);
+      formData.append("transactionDateIso", utcDate.toISOString());
     }
 
     startTransition(async () => {
@@ -321,7 +323,7 @@ export default function TransactionForm({ cards, merchants, mccs, initialData }:
             <input 
               name="date" 
               type="date" 
-              defaultValue={getLocalDateString(initialData?.transactionDate ? new Date(initialData.transactionDate) : new Date())} 
+              defaultValue={initialData?.transactionDate ? formatDateForInput(new Date(initialData.transactionDate), true) : formatDateForInput(new Date(), false)} 
               className="sber-input" 
             />
           </div>
@@ -330,7 +332,7 @@ export default function TransactionForm({ cards, merchants, mccs, initialData }:
             <input 
               name="time" 
               type="time" 
-              defaultValue={getLocalTimeString(initialData?.transactionDate ? new Date(initialData.transactionDate) : new Date())} 
+              defaultValue={initialData?.transactionDate ? formatTimeForInput(new Date(initialData.transactionDate), true) : formatTimeForInput(new Date(), false)} 
               className="sber-input" 
             />
           </div>
@@ -362,4 +364,3 @@ export default function TransactionForm({ cards, merchants, mccs, initialData }:
     </section>
   );
 }
-

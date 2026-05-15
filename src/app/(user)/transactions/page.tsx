@@ -21,9 +21,7 @@ const formatUTCDate = (d: Date) => {
 };
 
 const formatUTCTime = (d: Date) => {
-  const hours = String(d.getUTCHours()).padStart(2, '0');
-  const minutes = String(d.getUTCMinutes()).padStart(2, '0');
-  return `${hours}:${minutes}`;
+  return d.toISOString().substring(11, 16);
 };
 
 export default async function TransactionsPage({ 
