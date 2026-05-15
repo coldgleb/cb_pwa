@@ -225,96 +225,116 @@ export default async function TransactionsPage({
 
                     return (
                       <div key={item.id} className="sber-card" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px', justifyContent: 'space-between' }}>
-                        <div className={flex({ gap: "12px", align: "flex-start" })}>
-                          <div className={css({ w: "48px", h: "48px", borderRadius: "14px", bg: "var(--surface-secondary)", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid", borderColor: "var(--border-color)", overflow: "hidden", flexShrink: 0 })}>
-                            {merchantIcon ? (
-                              <img src={merchantIcon} alt={item.merchantName} className={css({ w: "full", h: "full", objectFit: "contain", p: "4px" })} />
-                            ) : (
-                              <div className={css({ color: "#64748b" })}>
-                                {getCategoryIcon(item.categoryName)}
+                        {/* TOP ROW */}
+                        <div className={flex({ justify: "space-between", align: "center", gap: "12px" })}>
+                          <div className={flex({ align: "center", gap: "10px", flex: 1, minW: 0 })}>
+                            {/* Top Left: Icon */}
+                            <div className={css({ w: "40px", h: "40px", borderRadius: "12px", bg: "var(--surface-secondary)", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid", borderColor: "var(--border-color)", overflow: "hidden", flexShrink: 0 })}>
+                              {merchantIcon ? (
+                                <img src={merchantIcon} alt={item.merchantName} className={css({ w: "full", h: "full", objectFit: "contain", p: "4px" })} />
+                              ) : (
+                                <div className={css({ color: "#64748b" })}>
+                                  {getCategoryIcon(item.categoryName)}
+                                </div>
+                              )}
+                            </div>
+                            
+                            {/* Top Center: Time, Merchant, Card */}
+                            <div className={stack({ gap: "0", flex: 1, minW: 0 })}>
+                              <div className={flex({ align: "center", gap: "6px" })}>
+                                <span className={css({ fontSize: "12px", fontWeight: "800", color: "sberGreen", flexShrink: 0 })}>
+                                  {item.date ? formatUTCTime(new Date(item.date)) : ''}
+                                </span>
+                                <p className={css({ fontWeight: "800", fontSize: "14px", color: "var(--foreground)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" })} title={item.merchantName}>
+                                  {item.merchantName}
+                                </p>
+                              </div>
+                              <p className={css({ fontSize: "11px", color: "secondaryText", fontWeight: "500", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" })}>
+                                {item.bankName} {item.cardName}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Top Right: Total Cashback */}
+                          <div className={css({ 
+                            fontSize: "15px", 
+                            fontWeight: "900", 
+                            color: totalCashback > 0 ? "var(--sber-green)" : (totalCashback < 0 ? "#ef4444" : "var(--foreground)"),
+                            textAlign: "right",
+                            flexShrink: 0
+                          })}>
+                            {totalCashback !== 0 ? `${totalCashback.toFixed(2)}₽` : '—'}
+                          </div>
+                        </div>
+
+                        {/* BOTTOM ROW */}
+                        <div className={flex({ justify: "space-between", align: "center", gap: "12px" })}>
+                          {/* Bottom Left: Expected Cashback (Calculated + Adjustment) and Percentage */}
+                          <div className={flex({ align: "center", gap: "6px", flexShrink: 0 })}>
+                            {item.manualAdjustment !== 0 && (
+                              <div className={css({ 
+                                px: "6px", 
+                                py: "1px", 
+                                bg: item.manualAdjustment > 0 ? "rgba(234, 179, 8, 0.1)" : "rgba(239, 68, 68, 0.1)", 
+                                color: item.manualAdjustment > 0 ? "#eab308" : "#ef4444", 
+                                borderRadius: "6px", 
+                                fontSize: "11px", 
+                                fontWeight: "900" 
+                              })}>
+                                {item.manualAdjustment > 0 ? `+${item.manualAdjustment.toFixed(2)}` : item.manualAdjustment.toFixed(2)}
+                              </div>
+                            )}
+
+                            {item.cashback !== null && item.cashback > 0 && (
+                              <div className={flex({ align: "center", gap: "4px" })}>
+                                <span className={css({ fontSize: "10px", fontWeight: "800", color: "#94a3b8" })}>
+                                  {item.cashbackPercentage !== null ? item.cashbackPercentage : (item.amount > 0 ? ((item.cashback || 0) / item.amount * 100).toFixed(0) : 0)}%
+                                </span>
+                                <div className={css({ px: "6px", py: "1px", bg: "rgba(33, 160, 56, 0.1)", color: "var(--sber-green)", borderRadius: "6px", fontSize: "11px", fontWeight: "900" })}>
+                                  +{item.cashback.toFixed(2)}
+                                </div>
                               </div>
                             )}
                           </div>
-                          <div className={stack({ gap: "0", flex: "1", minW: 0 })}>
-                            <p className={css({ fontWeight: "800", fontSize: "15px", color: "var(--foreground)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" })} title={item.merchantName}>{item.merchantName}</p>
-                            <p className={css({ fontSize: "12px", color: "secondaryText", fontWeight: "500", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" })}>
-                              {item.bankName} {item.cardName}
-                            </p>
+
+                          {/* Bottom Center: Category */}
+                          <div className={css({ 
+                            fontSize: "10px", 
+                            fontWeight: "800", 
+                            color: "#94a3b8", 
+                            textTransform: "uppercase", 
+                            whiteSpace: "nowrap", 
+                            overflow: "hidden", 
+                            textOverflow: "ellipsis", 
+                            flex: 1,
+                            textAlign: "center"
+                          })}>
+                            {item.categoryName || 'Без категории'}
                           </div>
-                          {totalCashback !== 0 && (
-                            <div className={css({ 
-                              fontSize: "15px", 
-                              fontWeight: "900", 
-                              color: totalCashback > 0 ? "var(--sber-green)" : "#ef4444",
-                              textAlign: "right",
-                              flexShrink: 0
-                            })}>
-                              {totalCashback.toFixed(2)}₽
-                            </div>
-                          )}
+
+                          {/* Bottom Right: Amount and Split Info */}
+                          <div className={stack({ align: "flex-end", gap: "0", flexShrink: 0 })}>
+                            <p className={css({ fontWeight: "900", fontSize: "17px", color: "var(--foreground)" })}>
+                              {item.amount.toFixed(2)}₽
+                            </p>
+                            {isSplit && (
+                              <p className={css({ fontSize: "9px", color: "secondaryText", fontWeight: "700", textTransform: "uppercase" })}>
+                                ЧЕК: {item.paidAmount?.toFixed(2)}₽
+                              </p>
+                            )}
+                          </div>
                         </div>
 
-                        <div className={stack({ gap: "8px" })}>
-                          <div className={flex({ justify: "space-between", align: "flex-end" })}>
-                            <div className={stack({ gap: "4px" })}>
-                              <div className={flex({ align: "center", gap: "6px" })}>
-                                <span className={css({ fontSize: "10px", fontWeight: "800", color: "sberGreen", textTransform: "uppercase" })}>
-                                  {item.date ? formatUTCTime(new Date(item.date)) : ''}
-                                </span>
-                                <span className={css({ w: "3px", h: "3px", bg: "#cbd5e1", borderRadius: "full" })} />
-                                <span className={css({ fontSize: "10px", fontWeight: "800", color: "#94a3b8", textTransform: "uppercase", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxW: "120px" })}>
-                                  {item.categoryName || 'Без категории'}
-                                </span>
-                              </div>
-                              <div className={flex({ align: "center", gap: "6px" })}>
-                                {item.manualAdjustment !== 0 && (
-                                  <div className={css({ 
-                                    px: "6px", 
-                                    py: "1px", 
-                                    bg: item.manualAdjustment > 0 ? "rgba(254, 252, 232, 0.1)" : "rgba(254, 242, 242, 0.1)", 
-                                    color: item.manualAdjustment > 0 ? "#eab308" : "#ef4444", 
-                                    borderRadius: "6px", 
-                                    fontSize: "11px", 
-                                    fontWeight: "900" 
-                                  })}>
-                                    {item.manualAdjustment > 0 ? `+${item.manualAdjustment.toFixed(2)}` : item.manualAdjustment.toFixed(2)}
-                                  </div>
-                                )}
-
-                                {item.cashback !== null && item.cashback > 0 && (
-                                  <div className={flex({ align: "center", gap: "4px" })}>
-                                    <span className={css({ fontSize: "10px", fontWeight: "800", color: "#94a3b8" })}>
-                                      {item.cashbackPercentage !== null ? item.cashbackPercentage : (item.amount > 0 ? ((item.cashback || 0) / item.amount * 100).toFixed(0) : 0)}%
-                                    </span>
-                                    <div className={css({ px: "6px", py: "1px", bg: "rgba(33, 160, 56, 0.1)", color: "var(--sber-green)", borderRadius: "6px", fontSize: "11px", fontWeight: "900" })}>
-                                      +{item.cashback.toFixed(2)}
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                            <div className={stack({ align: "end", gap: "0" })}>
-                              <p className={css({ fontWeight: "900", fontSize: "18px", color: "var(--foreground)" })}>
-                                {item.amount.toFixed(2)}₽
-                              </p>
-                              {isSplit && (
-                                <p className={css({ fontSize: "10px", color: "secondaryText", fontWeight: "700" })}>
-                                  ЧЕК: {item.paidAmount?.toFixed(2)}₽
-                                </p>
-                              )}
-                            </div>
-                          </div>
-
-                          <div className={flex({ justify: "flex-end", gap: "4px", pt: "8px", borderTop: "1px solid", borderColor: "var(--separator)" })}>
-                            <a href={`/transactions/${item.id}/edit`} className={css({ color: "#64748b", p: "6px", borderRadius: "8px", _hover: { color: "var(--sber-green)", bg: "rgba(33, 160, 56, 0.05)" } })}>
-                              <Edit2 size={16} />
-                            </a>
-                            <form action={deleteTransaction.bind(null, item.id)}>
-                              <button type="submit" className={css({ color: "#64748b", p: "6px", cursor: "pointer", borderRadius: "8px", _hover: { color: "#ef4444", bg: "rgba(239, 68, 68, 0.05)" } })}>
-                                <Trash2 size={16} />
-                              </button>
-                            </form>
-                          </div>
+                        {/* ACTIONS */}
+                        <div className={flex({ justify: "flex-end", gap: "4px", pt: "8px", borderTop: "1px solid", borderColor: "var(--separator)" })}>
+                          <a href={`/transactions/${item.id}/edit`} className={css({ color: "#64748b", p: "6px", borderRadius: "8px", _hover: { color: "var(--sber-green)", bg: "rgba(33, 160, 56, 0.05)" } })}>
+                            <Edit2 size={16} />
+                          </a>
+                          <form action={deleteTransaction.bind(null, item.id)}>
+                            <button type="submit" className={css({ color: "#64748b", p: "6px", cursor: "pointer", borderRadius: "8px", _hover: { color: "#ef4444", bg: "rgba(239, 68, 68, 0.05)" } })}>
+                              <Trash2 size={16} />
+                            </button>
+                          </form>
                         </div>
                       </div>
                     );
