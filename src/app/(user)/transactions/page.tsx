@@ -13,6 +13,19 @@ import { getIconUrl } from "@/lib/utils/icons";
 
 export const dynamic = "force-dynamic";
 
+const formatUTCDate = (d: Date) => {
+  const day = String(d.getUTCDate()).padStart(2, '0');
+  const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const year = d.getUTCFullYear();
+  return `${day}.${month}.${year}`;
+};
+
+const formatUTCTime = (d: Date) => {
+  const hours = String(d.getUTCHours()).padStart(2, '0');
+  const minutes = String(d.getUTCMinutes()).padStart(2, '0');
+  return `${hours}:${minutes}`;
+};
+
 export default async function TransactionsPage({ 
   searchParams 
 }: { 
@@ -101,6 +114,15 @@ export default async function TransactionsPage({
     .where(and(...conditions))
     .orderBy(desc(transactions.transactionDate));
 
+  const groupedHistory = history.reduce((groups, item) => {
+    const dateStr = item.date ? formatUTCDate(new Date(item.date)) : 'Неизвестно';
+    if (!groups[dateStr]) {
+      groups[dateStr] = [];
+    }
+    groups[dateStr].push(item);
+    return groups;
+  }, {} as Record<string, typeof history>);
+
   const getCategoryIcon = (category: string | null) => {
     const name = category?.toLowerCase() || "";
     if (name.includes("супер") || name.includes("продукт")) return <ShoppingCart size={20} />;
@@ -186,113 +208,120 @@ export default async function TransactionsPage({
           </form>
         </section>
 
-        <div className={css({ display: "grid", gridTemplateColumns: { base: "1fr", md: "repeat(auto-fill, minmax(320px, 1fr))" }, gap: "12px" })}>
+        <div className={stack({ gap: "32px" })}>
           {history.length === 0 ? (
-            <div className={css({ gridColumn: "1/-1", py: "80px", textAlign: "center", color: "secondaryText", bg: "var(--card-bg)", borderRadius: "24px", border: "1px dashed", borderColor: "#e2e8f0" })}>
+            <div className={css({ py: "80px", textAlign: "center", color: "secondaryText", bg: "var(--card-bg)", borderRadius: "24px", border: "1px dashed", borderColor: "#e2e8f0" })}>
               <p className={css({ fontSize: "15px", fontWeight: "600" })}>Покупки не найдены</p>
             </div>
           ) : (
-            history.map(item => {
-              const isSplit = item.paidAmount && item.paidAmount !== item.amount;
-              const merchantIcon = getIconUrl({ logo: item.merchantLogo, website: item.merchantWebsite, name: item.merchantName });
-              const totalCashback = (item.cashback || 0) + (item.manualAdjustment || 0);
+            Object.entries(groupedHistory).map(([date, items]) => (
+              <div key={date} className={stack({ gap: "12px" })}>
+                <h3 className={css({ fontSize: "14px", fontWeight: "800", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em", ml: "8px" })}>{date}</h3>
+                <div className={css({ display: "grid", gridTemplateColumns: { base: "1fr", md: "repeat(auto-fill, minmax(320px, 1fr))" }, gap: "12px" })}>
+                  {items.map(item => {
+                    const isSplit = item.paidAmount && item.paidAmount !== item.amount;
+                    const merchantIcon = getIconUrl({ logo: item.merchantLogo, website: item.merchantWebsite, name: item.merchantName });
+                    const totalCashback = (item.cashback || 0) + (item.manualAdjustment || 0);
 
-              return (
-                <div key={item.id} className="sber-card" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px', justifyContent: 'space-between' }}>
-                  <div className={flex({ gap: "12px", align: "flex-start" })}>
-                    <div className={css({ w: "48px", h: "48px", borderRadius: "14px", bg: "var(--surface-secondary)", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid", borderColor: "var(--border-color)", overflow: "hidden", flexShrink: 0 })}>
-                      {merchantIcon ? (
-                        <img src={merchantIcon} alt={item.merchantName} className={css({ w: "full", h: "full", objectFit: "contain", p: "4px" })} />
-                      ) : (
-                        <div className={css({ color: "#64748b" })}>
-                          {getCategoryIcon(item.categoryName)}
-                        </div>
-                      )}
-                    </div>
-                    <div className={stack({ gap: "0", flex: "1", minW: 0 })}>
-                      <p className={css({ fontWeight: "800", fontSize: "15px", color: "var(--foreground)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" })} title={item.merchantName}>{item.merchantName}</p>
-                      <p className={css({ fontSize: "12px", color: "secondaryText", fontWeight: "500", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" })}>
-                        {item.bankName} {item.cardName}
-                      </p>
-                    </div>
-                    {totalCashback !== 0 && (
-                      <div className={css({ 
-                        fontSize: "15px", 
-                        fontWeight: "900", 
-                        color: totalCashback > 0 ? "var(--sber-green)" : "#ef4444",
-                        textAlign: "right",
-                        flexShrink: 0
-                      })}>
-                        {totalCashback.toFixed(2)}₽
-                      </div>
-                    )}
-                  </div>
-
-                  <div className={stack({ gap: "8px" })}>
-                    <div className={flex({ justify: "space-between", align: "flex-end" })}>
-                      <div className={stack({ gap: "4px" })}>
-                        <div className={flex({ align: "center", gap: "6px" })}>
-                          <span className={css({ fontSize: "10px", fontWeight: "800", color: "#94a3b8", textTransform: "uppercase" })}>
-                            {item.date?.toLocaleDateString('ru-RU')}
-                          </span>
-                          <span className={css({ w: "3px", h: "3px", bg: "#cbd5e1", borderRadius: "full" })} />
-                          <span className={css({ fontSize: "10px", fontWeight: "800", color: "sberGreen", textTransform: "uppercase", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxW: "120px" })}>
-                            {item.categoryName || 'Без категории'}
-                          </span>
-                        </div>
-                        <div className={flex({ align: "center", gap: "6px" })}>
-                          {item.manualAdjustment !== 0 && (
+                    return (
+                      <div key={item.id} className="sber-card" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px', justifyContent: 'space-between' }}>
+                        <div className={flex({ gap: "12px", align: "flex-start" })}>
+                          <div className={css({ w: "48px", h: "48px", borderRadius: "14px", bg: "var(--surface-secondary)", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid", borderColor: "var(--border-color)", overflow: "hidden", flexShrink: 0 })}>
+                            {merchantIcon ? (
+                              <img src={merchantIcon} alt={item.merchantName} className={css({ w: "full", h: "full", objectFit: "contain", p: "4px" })} />
+                            ) : (
+                              <div className={css({ color: "#64748b" })}>
+                                {getCategoryIcon(item.categoryName)}
+                              </div>
+                            )}
+                          </div>
+                          <div className={stack({ gap: "0", flex: "1", minW: 0 })}>
+                            <p className={css({ fontWeight: "800", fontSize: "15px", color: "var(--foreground)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" })} title={item.merchantName}>{item.merchantName}</p>
+                            <p className={css({ fontSize: "12px", color: "secondaryText", fontWeight: "500", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" })}>
+                              {item.bankName} {item.cardName}
+                            </p>
+                          </div>
+                          {totalCashback !== 0 && (
                             <div className={css({ 
-                              px: "6px", 
-                              py: "1px", 
-                              bg: item.manualAdjustment > 0 ? "rgba(254, 252, 232, 0.1)" : "rgba(254, 242, 242, 0.1)", 
-                              color: item.manualAdjustment > 0 ? "#eab308" : "#ef4444", 
-                              borderRadius: "6px", 
-                              fontSize: "11px", 
-                              fontWeight: "900" 
+                              fontSize: "15px", 
+                              fontWeight: "900", 
+                              color: totalCashback > 0 ? "var(--sber-green)" : "#ef4444",
+                              textAlign: "right",
+                              flexShrink: 0
                             })}>
-                              {item.manualAdjustment > 0 ? `+${item.manualAdjustment.toFixed(2)}` : item.manualAdjustment.toFixed(2)}
+                              {totalCashback.toFixed(2)}₽
                             </div>
                           )}
+                        </div>
 
-                          {item.cashback !== null && item.cashback > 0 && (
-                            <div className={flex({ align: "center", gap: "4px" })}>
-                              <span className={css({ fontSize: "10px", fontWeight: "800", color: "#94a3b8" })}>
-                                {item.cashbackPercentage !== null ? item.cashbackPercentage : (item.amount > 0 ? ((item.cashback || 0) / item.amount * 100).toFixed(0) : 0)}%
-                              </span>
-                              <div className={css({ px: "6px", py: "1px", bg: "rgba(33, 160, 56, 0.1)", color: "var(--sber-green)", borderRadius: "6px", fontSize: "11px", fontWeight: "900" })}>
-                                +{item.cashback.toFixed(2)}
+                        <div className={stack({ gap: "8px" })}>
+                          <div className={flex({ justify: "space-between", align: "flex-end" })}>
+                            <div className={stack({ gap: "4px" })}>
+                              <div className={flex({ align: "center", gap: "6px" })}>
+                                <span className={css({ fontSize: "10px", fontWeight: "800", color: "sberGreen", textTransform: "uppercase" })}>
+                                  {item.date ? formatUTCTime(new Date(item.date)) : ''}
+                                </span>
+                                <span className={css({ w: "3px", h: "3px", bg: "#cbd5e1", borderRadius: "full" })} />
+                                <span className={css({ fontSize: "10px", fontWeight: "800", color: "#94a3b8", textTransform: "uppercase", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxW: "120px" })}>
+                                  {item.categoryName || 'Без категории'}
+                                </span>
+                              </div>
+                              <div className={flex({ align: "center", gap: "6px" })}>
+                                {item.manualAdjustment !== 0 && (
+                                  <div className={css({ 
+                                    px: "6px", 
+                                    py: "1px", 
+                                    bg: item.manualAdjustment > 0 ? "rgba(254, 252, 232, 0.1)" : "rgba(254, 242, 242, 0.1)", 
+                                    color: item.manualAdjustment > 0 ? "#eab308" : "#ef4444", 
+                                    borderRadius: "6px", 
+                                    fontSize: "11px", 
+                                    fontWeight: "900" 
+                                  })}>
+                                    {item.manualAdjustment > 0 ? `+${item.manualAdjustment.toFixed(2)}` : item.manualAdjustment.toFixed(2)}
+                                  </div>
+                                )}
+
+                                {item.cashback !== null && item.cashback > 0 && (
+                                  <div className={flex({ align: "center", gap: "4px" })}>
+                                    <span className={css({ fontSize: "10px", fontWeight: "800", color: "#94a3b8" })}>
+                                      {item.cashbackPercentage !== null ? item.cashbackPercentage : (item.amount > 0 ? ((item.cashback || 0) / item.amount * 100).toFixed(0) : 0)}%
+                                    </span>
+                                    <div className={css({ px: "6px", py: "1px", bg: "rgba(33, 160, 56, 0.1)", color: "var(--sber-green)", borderRadius: "6px", fontSize: "11px", fontWeight: "900" })}>
+                                      +{item.cashback.toFixed(2)}
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             </div>
-                          )}
+                            <div className={stack({ align: "end", gap: "0" })}>
+                              <p className={css({ fontWeight: "900", fontSize: "18px", color: "var(--foreground)" })}>
+                                {item.amount.toFixed(2)}₽
+                              </p>
+                              {isSplit && (
+                                <p className={css({ fontSize: "10px", color: "secondaryText", fontWeight: "700" })}>
+                                  ЧЕК: {item.paidAmount?.toFixed(2)}₽
+                                </p>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className={flex({ justify: "flex-end", gap: "4px", pt: "8px", borderTop: "1px solid", borderColor: "var(--separator)" })}>
+                            <a href={`/transactions/${item.id}/edit`} className={css({ color: "#64748b", p: "6px", borderRadius: "8px", _hover: { color: "var(--sber-green)", bg: "rgba(33, 160, 56, 0.05)" } })}>
+                              <Edit2 size={16} />
+                            </a>
+                            <form action={deleteTransaction.bind(null, item.id)}>
+                              <button type="submit" className={css({ color: "#64748b", p: "6px", cursor: "pointer", borderRadius: "8px", _hover: { color: "#ef4444", bg: "rgba(239, 68, 68, 0.05)" } })}>
+                                <Trash2 size={16} />
+                              </button>
+                            </form>
+                          </div>
                         </div>
                       </div>
-                      <div className={stack({ align: "end", gap: "0" })}>
-                        <p className={css({ fontWeight: "900", fontSize: "18px", color: "var(--foreground)" })}>
-                          {item.amount.toFixed(2)}₽
-                        </p>
-                        {isSplit && (
-                          <p className={css({ fontSize: "10px", color: "secondaryText", fontWeight: "700" })}>
-                            ЧЕК: {item.paidAmount?.toFixed(2)}₽
-                          </p>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className={flex({ justify: "flex-end", gap: "4px", pt: "8px", borderTop: "1px solid", borderColor: "var(--separator)" })}>
-                      <a href={`/transactions/${item.id}/edit`} className={css({ color: "#64748b", p: "6px", borderRadius: "8px", _hover: { color: "var(--sber-green)", bg: "rgba(33, 160, 56, 0.05)" } })}>
-                        <Edit2 size={16} />
-                      </a>
-                      <form action={deleteTransaction.bind(null, item.id)}>
-                        <button type="submit" className={css({ color: "#64748b", p: "6px", cursor: "pointer", borderRadius: "8px", _hover: { color: "#ef4444", bg: "rgba(239, 68, 68, 0.05)" } })}>
-                          <Trash2 size={16} />
-                        </button>
-                      </form>
-                    </div>
-                  </div>
+                    );
+                  })}
                 </div>
-              );
-            })
+              </div>
+            ))
           )}
         </div>
       </div>
