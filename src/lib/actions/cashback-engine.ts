@@ -262,6 +262,7 @@ export async function bulkRecalculateTransactions(
           if (finalRounding === "cashback_0_01_down") cb = Math.floor(cb * 100) / 100;
           else if (finalRounding === "cashback_0_01_math") cb = Math.round(cb * 100) / 100;
           else if (finalRounding === "cashback_1_down") cb = Math.floor(cb);
+          else if (finalRounding === "cashback_1_math") cb = Math.round(cb);
           else if (finalRounding === "halva") cb = cb < 1 ? Math.floor(cb * 100) / 100 : Math.floor(cb);
 
           // G. Enforce Limits
@@ -615,6 +616,8 @@ export async function calculateCashbackForTransaction(
     calculatedCashback = Math.round(calculatedCashback * 100) / 100;
   } else if (finalRounding === "cashback_1_down") {
     calculatedCashback = Math.floor(calculatedCashback);
+  } else if (finalRounding === "cashback_1_math") {
+    calculatedCashback = Math.round(calculatedCashback);
   } else if (finalRounding === "halva") {
     calculatedCashback = calculatedCashback < 1 ? Math.floor(calculatedCashback * 100) / 100 : Math.floor(calculatedCashback);
   }

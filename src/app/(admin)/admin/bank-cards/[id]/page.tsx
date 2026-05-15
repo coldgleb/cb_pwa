@@ -104,6 +104,7 @@ export default async function EditBankCardPage({ params }: { params: Promise<{ i
     { value: "cashback_0_01_down", label: "Кешбэк до 0.01 вниз" },
     { value: "cashback_0_01_math", label: "Кешбэк до 0.01 по матем. правилам" },
     { value: "cashback_1_down", label: "Кешбэк до 1р вниз" },
+    { value: "cashback_1_math", label: "Кешбэк до 1р по матем. правилам" },
     { value: "halva", label: "Халва (до 1р — 0.01, от 1р — 1р)" },
   ];
 
