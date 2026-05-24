@@ -624,7 +624,7 @@ export default function TransactionForm({ cards, merchants, mccs, templates = []
             >
               <div className={css({ 
                 w: "20px", h: "20px", border: "2px solid", borderColor: saveAsTemplate ? "sberGreen" : "var(--border-color)", 
-                borderRadius: "4px", display: "flex", align: "center", justify: "center", bg: saveAsTemplate ? "sberGreen" : "transparent",
+                borderRadius: "4px", display: "flex", alignItems: "center", justifyContent: "center", bg: saveAsTemplate ? "sberGreen" : "transparent",
                 transition: "all 0.2s"
               })}>
                 {saveAsTemplate && <PlusCircle size={14} color="white" />}

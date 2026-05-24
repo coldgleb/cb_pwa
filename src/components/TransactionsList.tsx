@@ -256,7 +256,11 @@ export default function TransactionsList({ initialHistory, splitsMap }: Transact
                                 })}>
                                   {info.name}
                                 </span>
-                                {info.isInherited && <Percent size={10} className={css({ color: "var(--secondary-text)" })} title="Унаследовано от бонусов банка" />}
+                                {info.isInherited && (
+                                  <span title="Унаследовано от бонусов банка">
+                                    <Percent size={10} className={css({ color: "var(--secondary-text)" })} />
+                                  </span>
+                                )}
                               </div>
                             );
                           })()}

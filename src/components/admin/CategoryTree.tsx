@@ -279,8 +279,7 @@ function SortableCategoryItem({ node, level }: { node: CategoryNode; level: numb
             transition: "all 0.2s",
             mt: "-8px",
             mb: "8px",
-            border: "1px dashed transparent",
-            _dragOver: { borderColor: "sberGreen", bg: "rgba(33, 160, 56, 0.1)", h: "30px" }
+            border: "1px dashed transparent"
           })}
         />
       )}
