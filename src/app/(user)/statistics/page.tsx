@@ -98,7 +98,15 @@ export default async function StatisticsPage({
     .orderBy(sql`1`);
 
   // Fill in missing days for smoother charts
-  const daysInSelectedMonth = [];
+  interface DailyData {
+    day: string;
+    label: string;
+    spent: number;
+    cashback: number;
+    count: number;
+    profit: number;
+  }
+  const daysInSelectedMonth: DailyData[] = [];
   const totalDaysInMonth = new Date(year, month, 0).getDate();
   for (let i = 1; i <= totalDaysInMonth; i++) {
     const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
