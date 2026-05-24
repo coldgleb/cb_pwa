@@ -150,7 +150,7 @@ export default function TransactionForm({ cards, merchants, mccs, templates = []
 
   const evaluateExpression = (expr: string): string => {
     try {
-      const cleanExpr = expr.replace(/[^-+*/.0-9]/g, '');
+      const cleanExpr = expr.replace(/,/g, '.').replace(/[^-+*/.0-9]/g, '');
       if (!cleanExpr) return "";
       // eslint-disable-next-line no-new-func
       const result = new Function(`return ${cleanExpr}`)();
@@ -164,11 +164,21 @@ export default function TransactionForm({ cards, merchants, mccs, templates = []
   };
 
   const handleAmountBlur = (e: React.FocusEvent<HTMLInputElement>, type: "amount" | "paidAmount") => {
-    const val = e.target.value;
-    if (val.includes("+") || val.includes("-") || val.includes("*") || val.includes("/")) {
+    const val = e.target.value.replace(/,/g, '.');
+    const hasOperators = val.includes("+") || val.includes("-") || val.includes("*") || val.includes("/");
+    
+    if (hasOperators) {
       const result = evaluateExpression(val);
       if (type === "amount") setAmount(result);
       else setPaidAmount(result);
+    } else {
+      // Just format to 2 decimals if it's a number
+      const num = parseFloat(val);
+      if (!isNaN(num)) {
+        const formatted = num.toFixed(2);
+        if (type === "amount") setAmount(formatted);
+        else setPaidAmount(formatted);
+      }
     }
   };
 
@@ -251,10 +261,17 @@ export default function TransactionForm({ cards, merchants, mccs, templates = []
   };
 
   const handleSplitBlur = (index: number) => {
-    const val = splits[index].amount;
-    if (val.includes("+") || val.includes("-") || val.includes("*") || val.includes("/")) {
+    const val = splits[index].amount.replace(/,/g, '.');
+    const hasOperators = val.includes("+") || val.includes("-") || val.includes("*") || val.includes("/");
+    
+    if (hasOperators) {
       const result = evaluateExpression(val);
       updateSplit(index, "amount", result);
+    } else {
+      const num = parseFloat(val);
+      if (!isNaN(num)) {
+        updateSplit(index, "amount", num.toFixed(2));
+      }
     }
   };
 
@@ -344,7 +361,7 @@ export default function TransactionForm({ cards, merchants, mccs, templates = []
           }
           toast("Операция успешно добавлена", "success");
           
-          // Clear most fields, but KEEP card, date, and time
+          // Clear most fields, but KEEP card and DATE
           setAmount("");
           setPaidAmount("");
           setStoredShare("");
@@ -357,7 +374,8 @@ export default function TransactionForm({ cards, merchants, mccs, templates = []
           setSaveAsTemplate(false);
           setTemplateName("");
           
-          // No reset for selectedDate and selectedTime
+          // Reset time to current, but keep date
+          setSelectedTime(formatTimeForInput(new Date(), false));
           
           const form = document.querySelector('form') as HTMLFormElement;
           if (form) {

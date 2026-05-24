@@ -25,10 +25,8 @@ export async function getMerchantMccSuggestions(name: string) {
 export async function ensureMerchantExists(name: string, spendingCategoryId?: number) {
   const [existing] = await db.select().from(merchants).where(eq(merchants.name, name)).limit(1);
   if (existing) {
-    if (spendingCategoryId && existing.spendingCategoryId !== spendingCategoryId) {
-      await db.update(merchants).set({ spendingCategoryId }).where(eq(merchants.id, existing.id));
-      await recalculateTransactionsForMerchantNames([name]);
-    }
+    // If merchant exists, don't overwrite its category from the transaction form.
+    // Changes to merchant defaults should only be done via the Admin panel.
     return existing;
   }
 

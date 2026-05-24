@@ -62,6 +62,33 @@ export default function DatePicker({ name, defaultValue, value: controlledValue,
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let value = e.target.value.replace(/[^\d.]/g, "");
     
+    // Segment-based validation during typing
+    const parts = value.split(".");
+    
+    // Validate Day
+    if (parts[0]) {
+      if (parts[0].length > 2) parts[0] = parts[0].substring(0, 2);
+      const day = parseInt(parts[0]);
+      if (day > 31) parts[0] = "31";
+      if (parts[0] === "00") parts[0] = "01";
+    }
+    
+    // Validate Month
+    if (parts[1]) {
+      if (parts[1].length > 2) parts[1] = parts[1].substring(0, 2);
+      const month = parseInt(parts[1]);
+      if (month > 12) parts[1] = "12";
+      if (parts[1] === "00") parts[1] = "01";
+    }
+    
+    // Validate Year (only 4 digits)
+    if (parts[2] && parts[2].length > 4) {
+      parts[2] = parts[2].substring(0, 4);
+    }
+
+    // Reconstruct value
+    value = parts.join(".");
+    
     // Auto-format DD.MM.YYYY
     if (value.length === 2 && !value.includes(".")) value += ".";
     if (value.length === 5 && value.split(".").length === 2) value += ".";
@@ -70,11 +97,11 @@ export default function DatePicker({ name, defaultValue, value: controlledValue,
     setInputValue(value);
 
     // Try to parse valid date
-    const parts = value.split(".");
-    if (parts.length === 3 && parts[2].length === 4) {
-      const day = parseInt(parts[0]);
-      const month = parseInt(parts[1]) - 1;
-      const year = parseInt(parts[2]);
+    const finalParts = value.split(".");
+    if (finalParts.length === 3 && finalParts[2].length === 4) {
+      const day = parseInt(finalParts[0]);
+      const month = parseInt(finalParts[1]) - 1;
+      const year = parseInt(finalParts[2]);
       const d = new Date(year, month, day);
       if (!isNaN(d.getTime()) && d.getFullYear() === year && d.getMonth() === month && d.getDate() === day) {
         const yyyy = d.getFullYear();

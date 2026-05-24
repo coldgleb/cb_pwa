@@ -37,7 +37,7 @@ export default async function NewTransactionPage() {
     <div className={css({ minH: "100vh", bg: "var(--background)" })}>
       <div className="sber-container">
         <header className={stack({ gap: "4px", mb: "32px" })}>
-          <a href="/" className="sber-icon-button">
+          <a href="/transactions" className="sber-icon-button">
             <ArrowLeft size={20} />
           </a>
           <h1 className={css({ fontSize: "24px", fontWeight: "800", color: "var(--foreground)" })}>Покупка</h1>

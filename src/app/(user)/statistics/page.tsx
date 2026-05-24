@@ -73,6 +73,35 @@ export default async function StatisticsPage({
   const totalCount = Number(overall?.count) || 0;
   const avgCashbackPercent = totalSpent > 0 ? (totalCashback / totalSpent) * 100 : 0;
 
+  // 1b. Daily Dynamic (for charts)
+  const dailyStats = await db
+    .select({
+      day: sql<string>`strftime('%Y-%m-%d', datetime(${transactions.transactionDate}, 'unixepoch'))`,
+      spent: sql<number>`sum(${transactions.amount})`,
+      cashback: sql<number>`sum(${transactions.calculatedCashback} + ${transactions.manualCashbackAdjustment})`,
+      count: sql<number>`count(*)`
+    })
+    .from(transactions)
+    .where(and(...conditions))
+    .groupBy(sql`strftime('%Y-%m-%d', datetime(${transactions.transactionDate}, 'unixepoch'))`)
+    .orderBy(sql`strftime('%Y-%m-%d', datetime(${transactions.transactionDate}, 'unixepoch'))`);
+
+  // Fill in missing days for smoother charts
+  const daysInSelectedMonth = [];
+  const totalDays = new Date(year, month, 0).getDate();
+  for (let i = 1; i <= totalDays; i++) {
+    const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+    const dayData = dailyStats.find(d => d.day === dateStr);
+    daysInSelectedMonth.push({
+      day: dateStr,
+      label: String(i),
+      spent: Number(dayData?.spent) || 0,
+      cashback: Number(dayData?.cashback) || 0,
+      count: Number(dayData?.count) || 0,
+      profit: dayData?.spent ? (Number(dayData.cashback) / Number(dayData.spent)) * 100 : 0
+    });
+  }
+
   // 2. Статистика по категориям
   const categoryStats = await db
     .select({
@@ -127,7 +156,7 @@ export default async function StatisticsPage({
   const dynamicStart = new Date(year, month - 6, 1);
   const monthlyStats = await db
     .select({
-      month: sql<string>`strftime('%Y-%m', datetime(${transactions.transactionDate} / 1000, 'unixepoch'))`,
+      month: sql<string>`strftime('%Y-%m', datetime(${transactions.transactionDate}, 'unixepoch'))`,
       spent: sql<number>`sum(${transactions.amount})`,
     })
     .from(transactions)
@@ -136,8 +165,8 @@ export default async function StatisticsPage({
       gte(transactions.transactionDate, dynamicStart),
       lte(transactions.transactionDate, endDate)
     ))
-    .groupBy(sql`strftime('%Y-%m', datetime(${transactions.transactionDate} / 1000, 'unixepoch'))`)
-    .orderBy(sql`strftime('%Y-%m', datetime(${transactions.transactionDate} / 1000, 'unixepoch'))`);
+    .groupBy(sql`strftime('%Y-%m', datetime(${transactions.transactionDate}, 'unixepoch'))`)
+    .orderBy(sql`strftime('%Y-%m', datetime(${transactions.transactionDate}, 'unixepoch'))`);
 
   return (
     <div className={css({ minH: "100vh", bg: "var(--background)", pb: "40px" })}>
@@ -189,30 +218,134 @@ export default async function StatisticsPage({
           
           {/* Общие показатели */}
           <div className={grid({ columns: { base: 1, sm: 2, lg: 3 }, gap: "16px" })}>
+            {/* 1. Всего потрачено */}
+            <div className="sber-card">
+              <div className={flex({ justify: "space-between", mb: "12px" })}>
+                <ShoppingBag size={24} className={css({ color: "#3b82f6" })} />
+                <span className={css({ fontSize: "11px", fontWeight: "800", color: "var(--secondary-text)", textTransform: "uppercase" })}>Всего потрачено</span>
+              </div>
+              <p className={css({ fontSize: "28px", fontWeight: "900", color: "var(--foreground)" })}>{totalSpent.toLocaleString('ru-RU')} ₽</p>
+              <p className={css({ fontSize: "12px", mt: "4px", color: "var(--secondary-text)", fontWeight: "600" })}>За выбранный месяц</p>
+            </div>
+
+            {/* 2. Сэкономлено */}
             <div className="sber-card" style={{ background: "linear-gradient(135deg, #21a038 0%, #2ecc71 100%)", color: "white" }}>
               <div className={flex({ justify: "space-between", mb: "12px" })}>
                 <PiggyBank size={24} opacity={0.8} />
-                <span className={css({ fontSize: "11px", fontWeight: "800", opacity: 0.8, textTransform: "uppercase" })}>Сэкономлено за месяц</span>
+                <span className={css({ fontSize: "11px", fontWeight: "800", opacity: 0.8, textTransform: "uppercase" })}>Сэкономлено</span>
               </div>
               <p className={css({ fontSize: "28px", fontWeight: "900" })}>{totalCashback.toLocaleString('ru-RU')} ₽</p>
               <p className={css({ fontSize: "12px", mt: "4px", opacity: 0.9, fontWeight: "600" })}>За {totalCount} операций</p>
             </div>
             
+            {/* 3. Процент профита */}
             <div className="sber-card">
               <div className={flex({ justify: "space-between", mb: "12px" })}>
                 <Percent size={24} className={css({ color: "sberGreen" })} />
-                <span className={css({ fontSize: "11px", fontWeight: "800", color: "var(--secondary-text)", textTransform: "uppercase" })}>Средний возврат</span>
+                <span className={css({ fontSize: "11px", fontWeight: "800", color: "var(--secondary-text)", textTransform: "uppercase" })}>Процент профита</span>
               </div>
               <p className={css({ fontSize: "28px", fontWeight: "900", color: "var(--foreground)" })}>{avgCashbackPercent.toFixed(2)}%</p>
-              <p className={css({ fontSize: "12px", mt: "4px", color: "var(--secondary-text)", fontWeight: "600" })}>За выбранный период</p>
+              <p className={css({ fontSize: "12px", mt: "4px", color: "var(--secondary-text)", fontWeight: "600" })}>Средний возврат</p>
             </div>
           </div>
 
-          {/* Тренд трат */}
+          {/* Ежедневная динамика */}
+          <div className={grid({ columns: { base: 1, xl: 2 }, gap: "24px" })}>
+            
+            {/* График 1: Траты */}
+            <section className="sber-card">
+              <div className={flex({ align: "center", justify: "space-between", mb: "24px" })}>
+                <div className={flex({ align: "center", gap: "10px" })}>
+                  <TrendingUp size={20} className={css({ color: "#3b82f6" })} />
+                  <h3 className={css({ fontSize: "16px", fontWeight: "800" })}>Траты в рублях</h3>
+                </div>
+              </div>
+              <div className={flex({ align: "flex-end", justify: "space-between", h: "120px", gap: "4px" })}>
+                {daysInSelectedMonth.map((d, i) => {
+                  const maxSpent = Math.max(...daysInSelectedMonth.map(ms => ms.spent), 1);
+                  const height = (d.spent / maxSpent) * 100;
+                  return (
+                    <div key={i} className={css({ flex: 1, position: "relative", h: "full", display: "flex", alignItems: "flex-end" })} title={`${d.day}: ${d.spent}₽`}>
+                      <div className={css({ w: "full", bg: "#3b82f6", borderRadius: "2px", opacity: 0.8, minH: d.spent > 0 ? "2px" : 0 })} style={{ height: `${height}%` }} />
+                      {i % 5 === 0 && <span className={css({ position: "absolute", bottom: "-20px", left: "50%", transform: "translateX(-50%)", fontSize: "9px", fontWeight: "700", color: "var(--secondary-text)" })}>{d.label}</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+
+            {/* График 2: Количество операций */}
+            <section className="sber-card">
+              <div className={flex({ align: "center", justify: "space-between", mb: "24px" })}>
+                <div className={flex({ align: "center", gap: "10px" })}>
+                  <ShoppingBag size={20} className={css({ color: "#94a3b8" })} />
+                  <h3 className={css({ fontSize: "16px", fontWeight: "800" })}>Число операций</h3>
+                </div>
+              </div>
+              <div className={flex({ align: "flex-end", justify: "space-between", h: "120px", gap: "4px" })}>
+                {daysInSelectedMonth.map((d, i) => {
+                  const maxCount = Math.max(...daysInSelectedMonth.map(ms => ms.count), 1);
+                  const height = (d.count / maxCount) * 100;
+                  return (
+                    <div key={i} className={css({ flex: 1, position: "relative", h: "full", display: "flex", alignItems: "flex-end" })} title={`${d.day}: ${d.count} оп.`}>
+                      <div className={css({ w: "full", bg: "#94a3b8", borderRadius: "2px", opacity: 0.6, minH: d.count > 0 ? "2px" : 0 })} style={{ height: `${height}%` }} />
+                      {i % 5 === 0 && <span className={css({ position: "absolute", bottom: "-20px", left: "50%", transform: "translateX(-50%)", fontSize: "9px", fontWeight: "700", color: "var(--secondary-text)" })}>{d.label}</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+
+            {/* График 3: Кешбэк */}
+            <section className="sber-card">
+              <div className={flex({ align: "center", justify: "space-between", mb: "24px" })}>
+                <div className={flex({ align: "center", gap: "10px" })}>
+                  <PiggyBank size={20} className={css({ color: "sberGreen" })} />
+                  <h3 className={css({ fontSize: "16px", fontWeight: "800" })}>Выгода в рублях</h3>
+                </div>
+              </div>
+              <div className={flex({ align: "flex-end", justify: "space-between", h: "120px", gap: "4px" })}>
+                {daysInSelectedMonth.map((d, i) => {
+                  const maxCashback = Math.max(...daysInSelectedMonth.map(ms => ms.cashback), 1);
+                  const height = (d.cashback / maxCashback) * 100;
+                  return (
+                    <div key={i} className={css({ flex: 1, position: "relative", h: "full", display: "flex", alignItems: "flex-end" })} title={`${d.day}: ${d.cashback.toFixed(2)}₽`}>
+                      <div className={css({ w: "full", bg: "sberGreen", borderRadius: "2px", opacity: 0.8, minH: d.cashback > 0 ? "2px" : 0 })} style={{ height: `${height}%` }} />
+                      {i % 5 === 0 && <span className={css({ position: "absolute", bottom: "-20px", left: "50%", transform: "translateX(-50%)", fontSize: "9px", fontWeight: "700", color: "var(--secondary-text)" })}>{d.label}</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+
+            {/* График 4: Процент профита */}
+            <section className="sber-card">
+              <div className={flex({ align: "center", justify: "space-between", mb: "24px" })}>
+                <div className={flex({ align: "center", gap: "10px" })}>
+                  <Percent size={20} className={css({ color: "var(--foreground)" })} />
+                  <h3 className={css({ fontSize: "16px", fontWeight: "800" })}>Эффективность (%)</h3>
+                </div>
+              </div>
+              <div className={flex({ align: "flex-end", justify: "space-between", h: "120px", gap: "4px" })}>
+                {daysInSelectedMonth.map((d, i) => {
+                  const maxProfit = Math.max(...daysInSelectedMonth.map(ms => ms.profit), 5);
+                  const height = (d.profit / maxProfit) * 100;
+                  return (
+                    <div key={i} className={css({ flex: 1, position: "relative", h: "full", display: "flex", alignItems: "flex-end" })} title={`${d.day}: ${d.profit.toFixed(2)}%`}>
+                      <div className={css({ w: "full", bg: "var(--foreground)", borderRadius: "2px", opacity: 0.6, minH: d.profit > 0 ? "2px" : 0 })} style={{ height: `${height}%` }} />
+                      {i % 5 === 0 && <span className={css({ position: "absolute", bottom: "-20px", left: "50%", transform: "translateX(-50%)", fontSize: "9px", fontWeight: "700", color: "var(--secondary-text)" })}>{d.label}</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          </div>
+
+          {/* Сравнение месяцев */}
           <section className="sber-card">
             <div className={flex({ align: "center", gap: "10px", mb: "20px" })}>
-              <TrendingUp size={20} className={css({ color: "sberGreen" })} />
-              <h3 className={css({ fontSize: "16px", fontWeight: "800" })}>Динамика трат</h3>
+              <Calendar size={20} className={css({ color: "var(--secondary-text)" })} />
+              <h3 className={css({ fontSize: "16px", fontWeight: "800" })}>Сравнение месяцев</h3>
             </div>
             <div className={flex({ align: "flex-end", justify: "space-between", h: "120px", px: "10px", gap: "8px" })}>
               {monthlyStats.map((m, i) => {

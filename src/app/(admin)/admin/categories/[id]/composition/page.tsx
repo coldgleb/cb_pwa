@@ -81,53 +81,77 @@ export default async function CategoryCompositionPage({ params }: { params: Prom
   const merchantOptions = availableMerchants.map(m => ({ value: m.id.toString(), label: m.name }));
 
   return (
-    <div className={stack({ gap: "32px" })}>
-      <header className={flex({ align: "center", gap: "16px", mb: "8px" })}>
-        <a href={`/admin/bank-cards/${category.bankCardId}`} className="sber-icon-button">
-          <ArrowLeft size={20} />
-        </a>
-        <div className={stack({ gap: "4px" })}>
-          <h1 className={css({ fontSize: "24px", fontWeight: "800", color: "var(--foreground)" })}>Состав "{category.name}"</h1>
-          <p className={css({ fontSize: "14px", color: "var(--secondary-text)", fontWeight: "600" })}>{category.bankName} • {category.cardName}</p>
+    <div className={css({ minH: "100vh", bg: "var(--background)", pb: "40px" })}>
+      <div className="sber-container-admin">
+        <header className={flex({ align: "center", gap: "16px", mb: "32px" })}>
+          <a href={`/admin/bank-cards/${category.bankCardId}`} className="sber-icon-button" style={{ flexShrink: 0 }}>
+            <ArrowLeft size={20} />
+          </a>
+          <div className={stack({ gap: "4px" })}>
+            <h1 className={css({ fontSize: "24px", fontWeight: "800", color: "var(--foreground)" })}>Состав категории</h1>
+            <div className={flex({ align: "center", gap: "8px" })}>
+              <span className={css({ px: "8px", py: "3px", bg: "var(--foreground)", color: "var(--card-bg)", borderRadius: "6px", fontSize: "11px", fontWeight: "800" })}>
+                {category.name.toUpperCase()}
+              </span>
+              <p className={css({ fontSize: "13px", color: "var(--secondary-text)", fontWeight: "600" })}>
+                {category.bankName} • {category.cardName}
+              </p>
+            </div>
+          </div>
+        </header>
+
+        <div className={stack({ gap: "32px" })}>
+          
+          {/* Блок МСС */}
+          <section className="sber-card">
+            <div className={flex({ align: "center", justify: "space-between", mb: "20px" })}>
+              <div className={flex({ align: "center", gap: "10px" })}>
+                <div className={css({ p: "6px", bg: "var(--sber-green)", borderRadius: "8px", color: "white" })}>
+                  <Tag size={18} />
+                </div>
+                <h2 className="sber-label" style={{ marginBottom: 0 }}>MCC-КОДЫ</h2>
+              </div>
+              <CopyMccsButton mccs={linkedMcc.map(m => m.code).join(", ")} />
+            </div>
+            
+            <div className={css({ bg: "var(--surface-secondary)", p: "20px", borderRadius: "16px", border: "1px solid", borderColor: "var(--border-color)" })}>
+              <CompositionActions 
+                categoryId={categoryId}
+                type="mcc"
+                options={mccOptions}
+                linkAction={linkMccToCategory}
+                unlinkAction={unlinkMccFromCategory}
+                linkMultipleAction={linkMultipleMccToCategory}
+                linkedItems={linkedMcc.map(m => ({ id: m.code, label: m.description, sublabel: m.code }))}
+              />
+            </div>
+          </section>
+
+          {/* Блок Мерчантов */}
+          <section className="sber-card">
+            <div className={flex({ align: "center", gap: "10px", mb: "20px" })}>
+              <div className={css({ p: "6px", bg: "#3b82f6", borderRadius: "8px", color: "white" })}>
+                <Store size={18} />
+              </div>
+              <h2 className="sber-label" style={{ marginBottom: 0 }}>ПРИВЯЗАННЫЕ МАГАЗИНЫ</h2>
+            </div>
+            
+            <div className={css({ bg: "var(--surface-secondary)", p: "20px", borderRadius: "16px", border: "1px solid", borderColor: "var(--border-color)" })}>
+              <CompositionActions 
+                categoryId={categoryId}
+                type="merchant"
+                options={merchantOptions}
+                linkAction={linkMerchantToCategory}
+                unlinkAction={unlinkMerchantFromCategory}
+                linkedItems={linkedMerchants.map(m => ({ id: m.id, label: m.name }))}
+              />
+            </div>
+            <p className={css({ fontSize: "12px", color: "var(--secondary-text)", mt: "12px", ml: "4px", lineHeight: "1.5" })}>
+              Добавление конкретных магазинов имеет приоритет над общими MCC-кодами. Полезно для партнеров или исключений.
+            </p>
+          </section>
+
         </div>
-      </header>
-
-      <div className={stack({ gap: "40px" })}>
-        
-        {/* Блок МСС */}
-        <section className={stack({ gap: "16px" })}>
-          <div className={flex({ align: "center", justify: "space-between" })}>
-            <h2 className="sber-label">ПРИВЯЗАННЫЕ MCC-КОДЫ</h2>
-            <CopyMccsButton mccs={linkedMcc.map(m => m.code).join(", ")} />
-          </div>
-          
-          <CompositionActions 
-            categoryId={categoryId}
-            type="mcc"
-            options={mccOptions}
-            linkAction={linkMccToCategory}
-            unlinkAction={unlinkMccFromCategory}
-            linkMultipleAction={linkMultipleMccToCategory}
-            linkedItems={linkedMcc.map(m => ({ id: m.code, label: m.description, sublabel: m.code }))}
-          />
-        </section>
-
-        {/* Блок Мерчантов */}
-        <section className={stack({ gap: "16px" })}>
-          <div className={flex({ align: "center", justify: "space-between" })}>
-            <h2 className="sber-label">ПРИВЯЗАННЫЕ МЕРЧАНТЫ (МАГАЗИНЫ)</h2>
-          </div>
-          
-          <CompositionActions 
-            categoryId={categoryId}
-            type="merchant"
-            options={merchantOptions}
-            linkAction={linkMerchantToCategory}
-            unlinkAction={unlinkMerchantFromCategory}
-            linkedItems={linkedMerchants.map(m => ({ id: m.id, label: m.name }))}
-          />
-        </section>
-
       </div>
     </div>
   );

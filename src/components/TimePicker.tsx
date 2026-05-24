@@ -59,6 +59,26 @@ export default function TimePicker({ name, defaultValue, value: controlledValue,
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let value = e.target.value.replace(/[^\d:]/g, "");
     
+    // Segment-based validation during typing
+    const parts = value.split(":");
+    
+    // Validate Hours
+    if (parts[0]) {
+      if (parts[0].length > 2) parts[0] = parts[0].substring(0, 2);
+      const h = parseInt(parts[0]);
+      if (h > 23) parts[0] = "23";
+    }
+    
+    // Validate Minutes
+    if (parts[1]) {
+      if (parts[1].length > 2) parts[1] = parts[1].substring(0, 2);
+      const m = parseInt(parts[1]);
+      if (m > 59) parts[1] = "59";
+    }
+
+    // Reconstruct value
+    value = parts.join(":");
+    
     // Auto-format HH:mm
     if (value.length === 2 && !value.includes(":")) value += ":";
     if (value.length > 5) value = value.substring(0, 5);
@@ -66,10 +86,10 @@ export default function TimePicker({ name, defaultValue, value: controlledValue,
     setInputValue(value);
 
     // Try to parse valid time
-    const parts = value.split(":");
-    if (parts.length === 2 && parts[0].length === 2 && parts[1].length === 2) {
-      const h = parseInt(parts[0]);
-      const m = parseInt(parts[1]);
+    const finalParts = value.split(":");
+    if (finalParts.length === 2 && finalParts[0].length === 2 && finalParts[1].length === 2) {
+      const h = parseInt(finalParts[0]);
+      const m = parseInt(finalParts[1]);
       if (h >= 0 && h <= 23 && m >= 0 && m <= 59) {
         updateSelectedTime(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
       }
