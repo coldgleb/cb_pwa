@@ -8,18 +8,31 @@ import { Clock } from "lucide-react";
 interface TimePickerProps {
   name: string;
   defaultValue?: string; // HH:mm
+  value?: string; // Controlled value
+  onChange?: (value: string) => void;
   required?: boolean;
 }
 
-export default function TimePicker({ name, defaultValue, required }: TimePickerProps) {
+export default function TimePicker({ name, defaultValue, value: controlledValue, onChange, required }: TimePickerProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [selectedTime, setSelectedTime] = useState(defaultValue || "12:00");
+  const [internalSelectedTime, setInternalSelectedTime] = useState(defaultValue || "12:00");
+  
+  const selectedTime = controlledValue !== undefined ? controlledValue : internalSelectedTime;
   const [inputValue, setInputValue] = useState(selectedTime);
   
   const [hours, setHours] = useState(selectedTime.split(':')[0]);
   const [minutes, setMinutes] = useState(selectedTime.split(':')[1]);
   
   const containerRef = useRef<HTMLDivElement>(null);
+
+  const updateSelectedTime = (timeStr: string) => {
+    if (controlledValue === undefined) {
+      setInternalSelectedTime(timeStr);
+    }
+    if (onChange) {
+      onChange(timeStr);
+    }
+  };
 
   // Sync hours/minutes with selectedTime
   useEffect(() => {
@@ -58,13 +71,13 @@ export default function TimePicker({ name, defaultValue, required }: TimePickerP
       const h = parseInt(parts[0]);
       const m = parseInt(parts[1]);
       if (h >= 0 && h <= 23 && m >= 0 && m <= 59) {
-        setSelectedTime(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+        updateSelectedTime(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
       }
     }
   };
 
   const handleSave = () => {
-    setSelectedTime(`${hours}:${minutes}`);
+    updateSelectedTime(`${hours}:${minutes}`);
     setIsOpen(false);
   };
 

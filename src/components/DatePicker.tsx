@@ -8,19 +8,36 @@ import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, X } from "lucide-r
 interface DatePickerProps {
   name: string;
   defaultValue?: string; // YYYY-MM-DD
+  value?: string; // Controlled value
+  onChange?: (value: string) => void;
   required?: boolean;
 }
 
-export default function DatePicker({ name, defaultValue, required }: DatePickerProps) {
+export default function DatePicker({ name, defaultValue, value: controlledValue, onChange, required }: DatePickerProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [selectedDate, setSelectedDate] = useState(defaultValue || new Date().toISOString().split('T')[0]);
-  const [viewDate, setViewDate] = useState(new Date(selectedDate));
+  const [internalSelectedDate, setInternalSelectedDate] = useState(defaultValue || new Date().toISOString().split('T')[0]);
+  
+  const selectedDate = controlledValue !== undefined ? controlledValue : internalSelectedDate;
+  const [viewDate, setViewDate] = useState(new Date(selectedDate || new Date()));
   const [inputValue, setInputValue] = useState("");
   
   const containerRef = useRef<HTMLDivElement>(null);
 
+  const updateSelectedDate = (dateStr: string) => {
+    if (controlledValue === undefined) {
+      setInternalSelectedDate(dateStr);
+    }
+    if (onChange) {
+      onChange(dateStr);
+    }
+  };
+
   // Initialize input value based on selected date
   useEffect(() => {
+    if (!selectedDate) {
+      setInputValue("");
+      return;
+    }
     const d = new Date(selectedDate);
     const day = String(d.getDate()).padStart(2, '0');
     const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -63,7 +80,8 @@ export default function DatePicker({ name, defaultValue, required }: DatePickerP
         const yyyy = d.getFullYear();
         const mm = String(d.getMonth() + 1).padStart(2, '0');
         const dd = String(d.getDate()).padStart(2, '0');
-        setSelectedDate(`${yyyy}-${mm}-${dd}`);
+        const dateStr = `${yyyy}-${mm}-${dd}`;
+        updateSelectedDate(dateStr);
         setViewDate(d);
       }
     }
@@ -109,7 +127,7 @@ export default function DatePicker({ name, defaultValue, required }: DatePickerP
     const mm = String(date.getMonth() + 1).padStart(2, '0');
     const dd = String(date.getDate()).padStart(2, '0');
     const dateStr = `${yyyy}-${mm}-${dd}`;
-    setSelectedDate(dateStr);
+    updateSelectedDate(dateStr);
     setIsOpen(false);
   };
 

@@ -111,6 +111,9 @@ export default function TransactionForm({ cards, merchants, mccs, templates = []
   const [isSearchingMcc, setIsSearchingMcc] = useState(false);
   const [isNewMerchant, setIsNewMerchant] = useState(false);
 
+  const [selectedDate, setSelectedDate] = useState(initialData?.transactionDate ? formatDateForInput(new Date(initialData.transactionDate), true) : formatDateForInput(new Date(), false));
+  const [selectedTime, setSelectedTime] = useState(initialData?.transactionDate ? formatTimeForInput(new Date(initialData.transactionDate), true) : formatTimeForInput(new Date(), false));
+
   const [saveAsTemplate, setSaveAsTemplate] = useState(false);
   const [templateName, setTemplateName] = useState("");
 
@@ -144,6 +147,30 @@ export default function TransactionForm({ cards, merchants, mccs, templates = []
       .filter(m => allowedCodes!.has(m.code))
       .map(m => ({ value: m.code, label: `${m.code} — ${m.description}` }));
   }, [mccs, selectedMerchant, suggestedMccs]);
+
+  const evaluateExpression = (expr: string): string => {
+    try {
+      const cleanExpr = expr.replace(/[^-+*/.0-9]/g, '');
+      if (!cleanExpr) return "";
+      // eslint-disable-next-line no-new-func
+      const result = new Function(`return ${cleanExpr}`)();
+      if (typeof result === 'number' && isFinite(result)) {
+        return Math.max(0, result).toFixed(2);
+      }
+      return expr;
+    } catch (e) {
+      return expr;
+    }
+  };
+
+  const handleAmountBlur = (e: React.FocusEvent<HTMLInputElement>, type: "amount" | "paidAmount") => {
+    const val = e.target.value;
+    if (val.includes("+") || val.includes("-") || val.includes("*") || val.includes("/")) {
+      const result = evaluateExpression(val);
+      if (type === "amount") setAmount(result);
+      else setPaidAmount(result);
+    }
+  };
 
   const handleMerchantChange = async (name: string) => {
     setSelectedMerchantName(name);
@@ -221,6 +248,14 @@ export default function TransactionForm({ cards, merchants, mccs, templates = []
     }
     
     setSplits(newSplits);
+  };
+
+  const handleSplitBlur = (index: number) => {
+    const val = splits[index].amount;
+    if (val.includes("+") || val.includes("-") || val.includes("*") || val.includes("/")) {
+      const result = evaluateExpression(val);
+      updateSplit(index, "amount", result);
+    }
   };
 
   // Re-calculate first split when total amount changes
@@ -309,7 +344,7 @@ export default function TransactionForm({ cards, merchants, mccs, templates = []
           }
           toast("Операция успешно добавлена", "success");
           
-          // Clear all fields except card
+          // Clear most fields, but KEEP card, date, and time
           setAmount("");
           setPaidAmount("");
           setStoredShare("");
@@ -322,13 +357,10 @@ export default function TransactionForm({ cards, merchants, mccs, templates = []
           setSaveAsTemplate(false);
           setTemplateName("");
           
-          // Keep manualAdjustment field reset if it was used (it's uncontrolled, so we rely on revalidation or manual fix if needed)
-          // But since it's a form action, the native form reset or state clearing is better.
+          // No reset for selectedDate and selectedTime
+          
           const form = document.querySelector('form') as HTMLFormElement;
           if (form) {
-            // We only want to clear specific native fields, not everything if we want to keep the card.
-            // Actually, clearing state is enough for controlled components. 
-            // For manualAdjustment (uncontrolled), let's find it.
             const adjInput = form.querySelector('input[name="manualAdjustment"]') as HTMLInputElement;
             if (adjInput) adjInput.value = "";
           }
@@ -452,11 +484,12 @@ export default function TransactionForm({ cards, merchants, mccs, templates = []
                 <label className="sber-label">ОБЩИЙ ЧЕК</label>
                 <input 
                   name="paidAmount" 
-                  type="number" 
-                  step="0.01" 
+                  type="text"
+                  inputMode="decimal"
                   required 
                   value={paidAmount}
                   onChange={(e) => setPaidAmount(e.target.value)}
+                  onBlur={(e) => handleAmountBlur(e, "paidAmount")}
                   placeholder="700.00"
                   className="sber-input" 
                   style={{ fontSize: "20px", fontWeight: "800" }}
@@ -467,11 +500,12 @@ export default function TransactionForm({ cards, merchants, mccs, templates = []
                 <label className="sber-label">МОЯ ДОЛЯ</label>
                 <input 
                   name="amount" 
-                  type="number" 
-                  step="0.01" 
+                  type="text"
+                  inputMode="decimal"
                   required 
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
+                  onBlur={(e) => handleAmountBlur(e, "amount")}
                   placeholder="350.00"
                   className="sber-input" 
                   style={{ fontSize: "20px", fontWeight: "800" }}
@@ -484,11 +518,12 @@ export default function TransactionForm({ cards, merchants, mccs, templates = []
               <label className="sber-label">СУММА (₽)</label>
               <input 
                 name="amount" 
-                type="number" 
-                step="0.01" 
+                type="text"
+                inputMode="decimal"
                 required 
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
+                onBlur={(e) => handleAmountBlur(e, "amount")}
                 placeholder="0.00"
                 className="sber-input" 
                 style={{ fontSize: "28px", fontWeight: "800", height: "64px" }}
@@ -544,10 +579,11 @@ export default function TransactionForm({ cards, merchants, mccs, templates = []
                 </div>
                 <div className={css({ w: "100px" })}>
                   <input 
-                    type="number" 
-                    step="0.01" 
+                    type="text"
+                    inputMode="decimal"
                     value={split.amount}
                     onChange={(e) => updateSplit(index, "amount", e.target.value)}
+                    onBlur={() => handleSplitBlur(index)}
                     placeholder="₽"
                     readOnly={index === 0}
                     className="sber-input"
@@ -608,14 +644,16 @@ export default function TransactionForm({ cards, merchants, mccs, templates = []
             <label className="sber-label">ДАТА</label>
             <DatePicker 
               name="date" 
-              defaultValue={initialData?.transactionDate ? formatDateForInput(new Date(initialData.transactionDate), true) : formatDateForInput(new Date(), false)} 
+              value={selectedDate}
+              onChange={setSelectedDate}
             />
           </div>
           <div className={stack({ gap: "6px", flex: 1 })}>
             <label className="sber-label">ВРЕМЯ</label>
             <TimePicker 
               name="time" 
-              defaultValue={initialData?.transactionDate ? formatTimeForInput(new Date(initialData.transactionDate), true) : formatTimeForInput(new Date(), false)} 
+              value={selectedTime}
+              onChange={setSelectedTime}
             />
           </div>
         </div>
