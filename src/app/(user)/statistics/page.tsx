@@ -7,15 +7,11 @@ import { eq, sql, and, gte, lte, desc, desc as drizzleDesc } from "drizzle-orm";
 import { 
   BarChart2, 
   TrendingUp, 
-  Wallet, 
   ShoppingBag, 
   Building2, 
   Percent, 
-  Calendar,
   ChevronRight,
-  ArrowUpRight,
-  PiggyBank,
-  ChevronLeft
+  PiggyBank
 } from "lucide-react";
 import { redirect } from "next/navigation";
 import { getIconUrl } from "@/lib/utils/icons";
@@ -51,16 +47,9 @@ export default async function StatisticsPage({
     };
   });
 
-  const conditions = [
-    eq(transactions.userId, userId),
-    gte(transactions.transactionDate, new Date(startDate.getTime())),
-    lte(transactions.transactionDate, new Date(endDate.getTime()))
-  ];
-
-  // If the above still fails, it means Drizzle is sending milliseconds but DB has seconds.
-  // Let's use raw numbers to be safe.
   const startUnix = Math.floor(startDate.getTime() / 1000);
   const endUnix = Math.floor(endDate.getTime() / 1000);
+  const todayStr = now.toISOString().split('T')[0];
   
   const conditionsRaw = [
     eq(transactions.userId, userId),
@@ -110,6 +99,8 @@ export default async function StatisticsPage({
   const totalDaysInMonth = new Date(year, month, 0).getDate();
   for (let i = 1; i <= totalDaysInMonth; i++) {
     const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+    if (dateStr > todayStr) continue;
+
     const dayData = dailyStats.find(d => d.day === dateStr);
     daysInSelectedMonth.push({
       day: dateStr,
@@ -144,6 +135,7 @@ export default async function StatisticsPage({
       id: banks.id,
       name: banks.name,
       logo: banks.logo,
+      website: banks.website,
       spent: sql<number>`sum(${transactions.amount})`,
       cashback: sql<number>`sum(${transactions.calculatedCashback} + ${transactions.manualCashbackAdjustment})`,
     })
@@ -152,7 +144,7 @@ export default async function StatisticsPage({
     .innerJoin(bankCards, eq(userCards.bankCardId, bankCards.id))
     .innerJoin(banks, eq(bankCards.bankId, banks.id))
     .where(and(...conditionsRaw))
-    .groupBy(banks.id, banks.name, banks.logo)
+    .groupBy(banks.id, banks.name, banks.logo, banks.website)
     .orderBy(drizzleDesc(sql`sum(${transactions.amount})`));
 
   // 4. Топ магазинов
@@ -170,23 +162,6 @@ export default async function StatisticsPage({
     .groupBy(transactions.merchantName, merchants.logo, merchants.website)
     .orderBy(drizzleDesc(sql`sum(${transactions.amount})`))
     .limit(10);
-
-  // 5. По месяцам (динамика за 6 месяцев от выбранного)
-  const dynamicStart = new Date(year, month - 6, 1);
-  const dynStartUnix = Math.floor(dynamicStart.getTime() / 1000);
-  const monthlyStats = await db
-    .select({
-      month: sql<string>`strftime('%Y-%m', datetime(${transactions.transactionDate} / (CASE WHEN ${transactions.transactionDate} > 2000000000 THEN 1000 ELSE 1 END), 'unixepoch', 'localtime'))`,
-      spent: sql<number>`sum(${transactions.amount})`,
-    })
-    .from(transactions)
-    .where(and(
-      eq(transactions.userId, userId),
-      sql`(${transactions.transactionDate} / (CASE WHEN ${transactions.transactionDate} > 2000000000 THEN 1000 ELSE 1 END)) >= ${dynStartUnix}`,
-      sql`(${transactions.transactionDate} / (CASE WHEN ${transactions.transactionDate} > 2000000000 THEN 1000 ELSE 1 END)) <= ${endUnix}`
-    ))
-    .groupBy(sql`1`)
-    .orderBy(sql`1`);
 
   return (
     <div className={css({ minH: "100vh", bg: "var(--background)", pb: "40px" })}>
@@ -361,40 +336,6 @@ export default async function StatisticsPage({
             </section>
           </div>
 
-          {/* Сравнение месяцев */}
-          <section className="sber-card">
-            <div className={flex({ align: "center", gap: "10px", mb: "20px" })}>
-              <Calendar size={20} className={css({ color: "var(--secondary-text)" })} />
-              <h3 className={css({ fontSize: "16px", fontWeight: "800" })}>Сравнение месяцев</h3>
-            </div>
-            <div className={flex({ align: "flex-end", justify: "space-between", h: "120px", px: "10px", gap: "8px" })}>
-              {monthlyStats.map((m, i) => {
-                const maxSpent = Math.max(...monthlyStats.map(ms => ms.spent), 1);
-                const height = (m.spent / maxSpent) * 100;
-                const isSelected = m.month === selectedMonth;
-                const monthName = new Date(m.month + "-01").toLocaleDateString('ru-RU', { month: 'short' });
-                return (
-                  <a key={i} href={`?month=${m.month}`} className={stack({ align: "center", gap: "8px", flex: 1, textDecoration: "none" })}>
-                    <div className={css({ 
-                      w: "full", 
-                      bg: isSelected ? "sberGreen" : "var(--surface-secondary)", 
-                      borderRadius: "6px",
-                      transition: "all 0.3s",
-                      minH: "4px",
-                      _hover: { bg: isSelected ? "sberGreen" : "var(--border-color)" }
-                    })} style={{ height: `${height}%` }} />
-                    <span className={css({ 
-                      fontSize: "10px", 
-                      fontWeight: "700", 
-                      color: isSelected ? "sberGreen" : "var(--secondary-text)", 
-                      textTransform: "uppercase" 
-                    })}>{monthName}</span>
-                  </a>
-                );
-              })}
-            </div>
-          </section>
-
           {/* Категории трат */}
           <section className="sber-card">
             <div className={flex({ align: "center", gap: "10px", mb: "20px" })}>
@@ -406,7 +347,7 @@ export default async function StatisticsPage({
                 <p className={css({ py: "20px", textAlign: "center", color: "var(--secondary-text)", fontSize: "14px" })}>Нет данных за этот период</p>
               ) : (
                 categoryStats.slice(0, 8).map((cat, i) => {
-                  const percentage = (cat.spent / totalSpent) * 100;
+                  const percentage = (cat.spent / (totalSpent || 1)) * 100;
                   return (
                     <div key={i} className={stack({ gap: "6px" })}>
                       <div className={flex({ justify: "space-between", align: "center" })}>
@@ -430,35 +371,40 @@ export default async function StatisticsPage({
               <h3 className={css({ fontSize: "17px", fontWeight: "800" })}>Доход по банкам</h3>
             </div>
             <div className={grid({ columns: { base: 1, sm: 2, lg: 3 }, gap: "12px" })}>
-              {bankStats.map((bank, i) => (
-                <a 
-                  key={i} 
-                  href={`/transactions?bankId=${bank.id}&startDate=${startDate.toISOString().split('T')[0]}&endDate=${endDate.toISOString().split('T')[0]}`}
-                  className="sber-card" 
-                  style={{ padding: "16px", textDecoration: "none", cursor: "pointer", transition: "transform 0.2s" }}
-                >
-                  <div className={flex({ align: "center", justify: "space-between", mb: "12px" })}>
-                    <div className={flex({ align: "center", gap: "12px" })}>
-                      {bank.logo ? (
-                        <img src={bank.logo} className={css({ w: "24px", h: "24px", objectFit: "contain" })} alt="" />
-                      ) : (
-                        <Building2 size={24} className={css({ color: "var(--secondary-text)" })} />
-                      )}
-                      <span className={css({ fontSize: "15px", fontWeight: "700", color: "var(--foreground)" })}>{bank.name}</span>
+              {bankStats.map((bank, i) => {
+                const bankIcon = getIconUrl({ logo: bank.logo, website: bank.website, name: bank.name });
+                return (
+                  <a 
+                    key={i} 
+                    href={`/transactions?bankId=${bank.id}&startDate=${startDate.toISOString().split('T')[0]}&endDate=${endDate.toISOString().split('T')[0]}`}
+                    className="sber-card" 
+                    style={{ padding: "16px", textDecoration: "none", cursor: "pointer", transition: "transform 0.2s" }}
+                  >
+                    <div className={flex({ align: "center", justify: "space-between", mb: "12px" })}>
+                      <div className={flex({ align: "center", gap: "12px" })}>
+                        <div className={css({ w: "28px", h: "28px", borderRadius: "8px", bg: "var(--surface-secondary)", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid", borderColor: "var(--border-color)", overflow: "hidden", flexShrink: 0 })}>
+                          {bankIcon ? (
+                            <img src={bankIcon} className={css({ w: "full", h: "full", objectFit: "contain", p: "4px" })} alt="" />
+                          ) : (
+                            <Building2 size={16} className={css({ color: "var(--secondary-text)" })} />
+                          )}
+                        </div>
+                        <span className={css({ fontSize: "15px", fontWeight: "700", color: "var(--foreground)" })}>{bank.name}</span>
+                      </div>
+                      <ChevronRight size={18} className={css({ color: "var(--border-color)" })} />
                     </div>
-                    <ChevronRight size={18} className={css({ color: "var(--border-color)" })} />
-                  </div>
-                  <div className={flex({ justify: "space-between", align: "flex-end" })}>
-                    <div className={stack({ gap: "0" })}>
-                      <span className={css({ fontSize: "11px", fontWeight: "800", color: "var(--secondary-text)" })}>КЕШБЭК</span>
-                      <span className={css({ fontSize: "18px", fontWeight: "900", color: "sberGreen" })}>+{bank.cashback.toLocaleString('ru-RU')} ₽</span>
+                    <div className={flex({ justify: "space-between", align: "flex-end" })}>
+                      <div className={stack({ gap: "0" })}>
+                        <span className={css({ fontSize: "11px", fontWeight: "800", color: "var(--secondary-text)" })}>КЕШБЭК</span>
+                        <span className={css({ fontSize: "18px", fontWeight: "900", color: "sberGreen" })}>+{bank.cashback.toLocaleString('ru-RU')} ₽</span>
+                      </div>
+                      <div className={css({ px: "8px", py: "4px", bg: "rgba(33, 160, 56, 0.1)", color: "sberGreen", borderRadius: "8px", fontSize: "12px", fontWeight: "800" })}>
+                        {((bank.cashback / (bank.spent || 1)) * 100).toFixed(1)}%
+                      </div>
                     </div>
-                    <div className={css({ px: "8px", py: "4px", bg: "rgba(33, 160, 56, 0.1)", color: "sberGreen", borderRadius: "8px", fontSize: "12px", fontWeight: "800" })}>
-                      {((bank.cashback / (bank.spent || 1)) * 100).toFixed(1)}%
-                    </div>
-                  </div>
-                </a>
-              ))}
+                  </a>
+                );
+              })}
             </div>
           </section>
 
