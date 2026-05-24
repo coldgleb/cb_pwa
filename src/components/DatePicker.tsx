@@ -201,7 +201,6 @@ export default function DatePicker({ name, defaultValue, required }: DatePickerP
                     fontSize: "14px",
                     fontWeight: isSelected ? "800" : "500",
                     cursor: "pointer",
-                    color: d.currentMonth ? "var(--foreground)" : "var(--secondary-text)",
                     bg: isSelected ? "var(--sber-green)" : (isToday ? "rgba(33, 160, 56, 0.1)" : "transparent"),
                     color: isSelected ? "white" : (isToday ? "var(--sber-green)" : (d.currentMonth ? "var(--foreground)" : "var(--secondary-text)")),
                     _hover: { bg: isSelected ? "var(--sber-green)" : "var(--surface-secondary)" }
