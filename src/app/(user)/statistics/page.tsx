@@ -53,8 +53,19 @@ export default async function StatisticsPage({
 
   const conditions = [
     eq(transactions.userId, userId),
-    gte(transactions.transactionDate, startDate),
-    lte(transactions.transactionDate, endDate)
+    gte(transactions.transactionDate, new Date(startDate.getTime())),
+    lte(transactions.transactionDate, new Date(endDate.getTime()))
+  ];
+
+  // If the above still fails, it means Drizzle is sending milliseconds but DB has seconds.
+  // Let's use raw numbers to be safe.
+  const startUnix = Math.floor(startDate.getTime() / 1000);
+  const endUnix = Math.floor(endDate.getTime() / 1000);
+  
+  const conditionsRaw = [
+    eq(transactions.userId, userId),
+    sql`(${transactions.transactionDate} / (CASE WHEN ${transactions.transactionDate} > 2000000000 THEN 1000 ELSE 1 END)) >= ${startUnix}`,
+    sql`(${transactions.transactionDate} / (CASE WHEN ${transactions.transactionDate} > 2000000000 THEN 1000 ELSE 1 END)) <= ${endUnix}`
   ];
 
   // 1. Общая статистика за выбранный период
@@ -65,7 +76,7 @@ export default async function StatisticsPage({
       count: sql<number>`count(*)`
     })
     .from(transactions)
-    .where(and(...conditions));
+    .where(and(...conditionsRaw));
 
   const overall = totalStats[0];
   const totalSpent = Number(overall?.totalSpent) || 0;
@@ -76,20 +87,20 @@ export default async function StatisticsPage({
   // 1b. Daily Dynamic (for charts)
   const dailyStats = await db
     .select({
-      day: sql<string>`strftime('%Y-%m-%d', datetime(${transactions.transactionDate}, 'unixepoch'))`,
+      day: sql<string>`strftime('%Y-%m-%d', datetime(${transactions.transactionDate} / (CASE WHEN ${transactions.transactionDate} > 2000000000 THEN 1000 ELSE 1 END), 'unixepoch', 'localtime'))`,
       spent: sql<number>`sum(${transactions.amount})`,
       cashback: sql<number>`sum(${transactions.calculatedCashback} + ${transactions.manualCashbackAdjustment})`,
       count: sql<number>`count(*)`
     })
     .from(transactions)
-    .where(and(...conditions))
-    .groupBy(sql`strftime('%Y-%m-%d', datetime(${transactions.transactionDate}, 'unixepoch'))`)
-    .orderBy(sql`strftime('%Y-%m-%d', datetime(${transactions.transactionDate}, 'unixepoch'))`);
+    .where(and(...conditionsRaw))
+    .groupBy(sql`1`)
+    .orderBy(sql`1`);
 
   // Fill in missing days for smoother charts
   const daysInSelectedMonth = [];
-  const totalDays = new Date(year, month, 0).getDate();
-  for (let i = 1; i <= totalDays; i++) {
+  const totalDaysInMonth = new Date(year, month, 0).getDate();
+  for (let i = 1; i <= totalDaysInMonth; i++) {
     const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
     const dayData = dailyStats.find(d => d.day === dateStr);
     daysInSelectedMonth.push({
@@ -98,7 +109,7 @@ export default async function StatisticsPage({
       spent: Number(dayData?.spent) || 0,
       cashback: Number(dayData?.cashback) || 0,
       count: Number(dayData?.count) || 0,
-      profit: dayData?.spent ? (Number(dayData.cashback) / Number(dayData.spent)) * 100 : 0
+      profit: (dayData?.spent && Number(dayData.spent) > 0) ? (Number(dayData.cashback) / Number(dayData.spent)) * 100 : 0
     });
   }
 
@@ -115,7 +126,7 @@ export default async function StatisticsPage({
     .from(transactions)
     .leftJoin(transactionCategorySplits, eq(transactions.id, transactionCategorySplits.transactionId))
     .leftJoin(spendingCategories, eq(sql`COALESCE(${transactionCategorySplits.spendingCategoryId}, ${transactions.spendingCategoryId})`, spendingCategories.id))
-    .where(and(...conditions))
+    .where(and(...conditionsRaw))
     .groupBy(spendingCategories.id, spendingCategories.name)
     .orderBy(drizzleDesc(sql`sum(COALESCE(${transactionCategorySplits.amount}, ${transactions.amount}))`));
 
@@ -132,7 +143,7 @@ export default async function StatisticsPage({
     .innerJoin(userCards, eq(transactions.userCardId, userCards.id))
     .innerJoin(bankCards, eq(userCards.bankCardId, bankCards.id))
     .innerJoin(banks, eq(bankCards.bankId, banks.id))
-    .where(and(...conditions))
+    .where(and(...conditionsRaw))
     .groupBy(banks.id, banks.name, banks.logo)
     .orderBy(drizzleDesc(sql`sum(${transactions.amount})`));
 
@@ -147,26 +158,27 @@ export default async function StatisticsPage({
     })
     .from(transactions)
     .leftJoin(merchants, eq(transactions.merchantName, merchants.name))
-    .where(and(...conditions))
+    .where(and(...conditionsRaw))
     .groupBy(transactions.merchantName, merchants.logo, merchants.website)
     .orderBy(drizzleDesc(sql`sum(${transactions.amount})`))
     .limit(10);
 
   // 5. По месяцам (динамика за 6 месяцев от выбранного)
   const dynamicStart = new Date(year, month - 6, 1);
+  const dynStartUnix = Math.floor(dynamicStart.getTime() / 1000);
   const monthlyStats = await db
     .select({
-      month: sql<string>`strftime('%Y-%m', datetime(${transactions.transactionDate}, 'unixepoch'))`,
+      month: sql<string>`strftime('%Y-%m', datetime(${transactions.transactionDate} / (CASE WHEN ${transactions.transactionDate} > 2000000000 THEN 1000 ELSE 1 END), 'unixepoch', 'localtime'))`,
       spent: sql<number>`sum(${transactions.amount})`,
     })
     .from(transactions)
     .where(and(
       eq(transactions.userId, userId),
-      gte(transactions.transactionDate, dynamicStart),
-      lte(transactions.transactionDate, endDate)
+      sql`(${transactions.transactionDate} / (CASE WHEN ${transactions.transactionDate} > 2000000000 THEN 1000 ELSE 1 END)) >= ${dynStartUnix}`,
+      sql`(${transactions.transactionDate} / (CASE WHEN ${transactions.transactionDate} > 2000000000 THEN 1000 ELSE 1 END)) <= ${endUnix}`
     ))
-    .groupBy(sql`strftime('%Y-%m', datetime(${transactions.transactionDate}, 'unixepoch'))`)
-    .orderBy(sql`strftime('%Y-%m', datetime(${transactions.transactionDate}, 'unixepoch'))`);
+    .groupBy(sql`1`)
+    .orderBy(sql`1`);
 
   return (
     <div className={css({ minH: "100vh", bg: "var(--background)", pb: "40px" })}>
