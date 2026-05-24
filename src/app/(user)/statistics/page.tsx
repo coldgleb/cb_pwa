@@ -129,7 +129,7 @@ export default async function StatisticsPage({
     .groupBy(spendingCategories.id, spendingCategories.name)
     .orderBy(drizzleDesc(sql`sum(COALESCE(${transactionCategorySplits.amount}, ${transactions.amount}))`));
 
-  // 3. Статистика по банкам
+  // 3. Статистика по банкам - Сортировка по кешбэку
   const bankStats = await db
     .select({
       id: banks.id,
@@ -145,7 +145,7 @@ export default async function StatisticsPage({
     .innerJoin(banks, eq(bankCards.bankId, banks.id))
     .where(and(...conditionsRaw))
     .groupBy(banks.id, banks.name, banks.logo, banks.website)
-    .orderBy(drizzleDesc(sql`sum(${transactions.amount})`));
+    .orderBy(drizzleDesc(sql`sum(${transactions.calculatedCashback} + ${transactions.manualCashbackAdjustment})`));
 
   // 4. Топ магазинов
   const merchantStats = await db
@@ -182,7 +182,6 @@ export default async function StatisticsPage({
             <BarChart2 size={32} className={css({ color: "sberGreen", opacity: 0.2 })} />
           </div>
 
-          {/* Month Selector */}
           <div className={flex({ gap: "8px", overflowX: "auto", pb: "8px", mx: "-20px", px: "20px", scrollbar: "hidden" })}>
             {availableMonths.map((m) => (
               <a
@@ -211,7 +210,7 @@ export default async function StatisticsPage({
 
         <div className={stack({ gap: "24px" })}>
           
-          {/* Общие показатели */}
+          {/* Общие показатели - Переупорядочено */}
           <div className={grid({ columns: { base: 1, sm: 2, lg: 3 }, gap: "16px" })}>
             {/* 1. Всего потрачено */}
             <div className="sber-card">
@@ -244,7 +243,7 @@ export default async function StatisticsPage({
             </div>
           </div>
 
-          {/* Ежедневная динамика */}
+          {/* Ежедневная динамика - Сетка и Линии */}
           <div className={grid({ columns: { base: 1, xl: 2 }, gap: "24px" })}>
             
             {/* График 1: Траты */}
@@ -255,17 +254,23 @@ export default async function StatisticsPage({
                   <h3 className={css({ fontSize: "16px", fontWeight: "800" })}>Траты в рублях</h3>
                 </div>
               </div>
-              <div className={flex({ align: "flex-end", justify: "space-between", h: "120px", gap: "4px" })}>
-                {daysInSelectedMonth.map((d, i) => {
-                  const maxSpent = Math.max(...daysInSelectedMonth.map(ms => ms.spent), 1);
-                  const height = (d.spent / maxSpent) * 100;
-                  return (
-                    <div key={i} className={css({ flex: 1, position: "relative", h: "full", display: "flex", alignItems: "flex-end" })} title={`${d.day}: ${d.spent}₽`}>
-                      <div className={css({ w: "full", bg: "#3b82f6", borderRadius: "2px", opacity: 0.8, minH: d.spent > 0 ? "2px" : 0 })} style={{ height: `${height}%` }} />
-                      {i % 5 === 0 && <span className={css({ position: "absolute", bottom: "-20px", left: "50%", transform: "translateX(-50%)", fontSize: "9px", fontWeight: "700", color: "var(--secondary-text)" })}>{d.label}</span>}
-                    </div>
-                  );
-                })}
+              <div className={css({ position: "relative", h: "120px", w: "full" })}>
+                {/* Horizontal grid lines */}
+                <div className={css({ position: "absolute", inset: 0, display: "flex", flexDirection: "column", justifyContent: "space-between", pointerEvents: "none" })}>
+                  {[0, 1, 2, 3].map(i => <div key={i} className={css({ w: "full", h: "1px", bg: "var(--border-color)", opacity: 0.3 })} />)}
+                </div>
+                <div className={flex({ align: "flex-end", justify: "space-between", h: "full", gap: "4px", position: "relative", zIndex: 1 })}>
+                  {daysInSelectedMonth.map((d, i) => {
+                    const maxSpent = Math.max(...daysInSelectedMonth.map(ms => ms.spent), 1);
+                    const height = (d.spent / maxSpent) * 100;
+                    return (
+                      <div key={i} className={css({ flex: 1, position: "relative", h: "full", display: "flex", alignItems: "flex-end" })} title={`${d.day}: ${d.spent}₽`}>
+                        <div className={css({ w: "full", bg: "#3b82f6", borderRadius: "2px", opacity: 0.8, minH: d.spent > 0 ? "2px" : 0 })} style={{ height: `${height}%` }} />
+                        {i % 5 === 0 && <span className={css({ position: "absolute", bottom: "-20px", left: "50%", transform: "translateX(-50%)", fontSize: "9px", fontWeight: "700", color: "var(--secondary-text)" })}>{d.label}</span>}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </section>
 
@@ -277,17 +282,23 @@ export default async function StatisticsPage({
                   <h3 className={css({ fontSize: "16px", fontWeight: "800" })}>Число операций</h3>
                 </div>
               </div>
-              <div className={flex({ align: "flex-end", justify: "space-between", h: "120px", gap: "4px" })}>
-                {daysInSelectedMonth.map((d, i) => {
-                  const maxCount = Math.max(...daysInSelectedMonth.map(ms => ms.count), 1);
-                  const height = (d.count / maxCount) * 100;
-                  return (
-                    <div key={i} className={css({ flex: 1, position: "relative", h: "full", display: "flex", alignItems: "flex-end" })} title={`${d.day}: ${d.count} оп.`}>
-                      <div className={css({ w: "full", bg: "#94a3b8", borderRadius: "2px", opacity: 0.6, minH: d.count > 0 ? "2px" : 0 })} style={{ height: `${height}%` }} />
-                      {i % 5 === 0 && <span className={css({ position: "absolute", bottom: "-20px", left: "50%", transform: "translateX(-50%)", fontSize: "9px", fontWeight: "700", color: "var(--secondary-text)" })}>{d.label}</span>}
-                    </div>
-                  );
-                })}
+              <div className={css({ position: "relative", h: "120px", w: "full" })}>
+                {/* Horizontal grid lines */}
+                <div className={css({ position: "absolute", inset: 0, display: "flex", flexDirection: "column", justifyContent: "space-between", pointerEvents: "none" })}>
+                  {[0, 1, 2, 3].map(i => <div key={i} className={css({ w: "full", h: "1px", bg: "var(--border-color)", opacity: 0.3 })} />)}
+                </div>
+                <div className={flex({ align: "flex-end", justify: "space-between", h: "full", gap: "4px", position: "relative", zIndex: 1 })}>
+                  {daysInSelectedMonth.map((d, i) => {
+                    const maxCount = Math.max(...daysInSelectedMonth.map(ms => ms.count), 1);
+                    const height = (d.count / maxCount) * 100;
+                    return (
+                      <div key={i} className={css({ flex: 1, position: "relative", h: "full", display: "flex", alignItems: "flex-end" })} title={`${d.day}: ${d.count} оп.`}>
+                        <div className={css({ w: "full", bg: "#94a3b8", borderRadius: "2px", opacity: 0.6, minH: d.count > 0 ? "2px" : 0 })} style={{ height: `${height}%` }} />
+                        {i % 5 === 0 && <span className={css({ position: "absolute", bottom: "-20px", left: "50%", transform: "translateX(-50%)", fontSize: "9px", fontWeight: "700", color: "var(--secondary-text)" })}>{d.label}</span>}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </section>
 
@@ -299,17 +310,23 @@ export default async function StatisticsPage({
                   <h3 className={css({ fontSize: "16px", fontWeight: "800" })}>Выгода в рублях</h3>
                 </div>
               </div>
-              <div className={flex({ align: "flex-end", justify: "space-between", h: "120px", gap: "4px" })}>
-                {daysInSelectedMonth.map((d, i) => {
-                  const maxCashback = Math.max(...daysInSelectedMonth.map(ms => ms.cashback), 1);
-                  const height = (d.cashback / maxCashback) * 100;
-                  return (
-                    <div key={i} className={css({ flex: 1, position: "relative", h: "full", display: "flex", alignItems: "flex-end" })} title={`${d.day}: ${d.cashback.toFixed(2)}₽`}>
-                      <div className={css({ w: "full", bg: "sberGreen", borderRadius: "2px", opacity: 0.8, minH: d.cashback > 0 ? "2px" : 0 })} style={{ height: `${height}%` }} />
-                      {i % 5 === 0 && <span className={css({ position: "absolute", bottom: "-20px", left: "50%", transform: "translateX(-50%)", fontSize: "9px", fontWeight: "700", color: "var(--secondary-text)" })}>{d.label}</span>}
-                    </div>
-                  );
-                })}
+              <div className={css({ position: "relative", h: "120px", w: "full" })}>
+                {/* Horizontal grid lines */}
+                <div className={css({ position: "absolute", inset: 0, display: "flex", flexDirection: "column", justifyContent: "space-between", pointerEvents: "none" })}>
+                  {[0, 1, 2, 3].map(i => <div key={i} className={css({ w: "full", h: "1px", bg: "var(--border-color)", opacity: 0.3 })} />)}
+                </div>
+                <div className={flex({ align: "flex-end", justify: "space-between", h: "full", gap: "4px", position: "relative", zIndex: 1 })}>
+                  {daysInSelectedMonth.map((d, i) => {
+                    const maxCashback = Math.max(...daysInSelectedMonth.map(ms => ms.cashback), 1);
+                    const height = (d.cashback / maxCashback) * 100;
+                    return (
+                      <div key={i} className={css({ flex: 1, position: "relative", h: "full", display: "flex", alignItems: "flex-end" })} title={`${d.day}: ${d.cashback.toFixed(2)}₽`}>
+                        <div className={css({ w: "full", bg: "sberGreen", borderRadius: "2px", opacity: 0.8, minH: d.cashback > 0 ? "2px" : 0 })} style={{ height: `${height}%` }} />
+                        {i % 5 === 0 && <span className={css({ position: "absolute", bottom: "-20px", left: "50%", transform: "translateX(-50%)", fontSize: "9px", fontWeight: "700", color: "var(--secondary-text)" })}>{d.label}</span>}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </section>
 
@@ -321,17 +338,23 @@ export default async function StatisticsPage({
                   <h3 className={css({ fontSize: "16px", fontWeight: "800" })}>Эффективность (%)</h3>
                 </div>
               </div>
-              <div className={flex({ align: "flex-end", justify: "space-between", h: "120px", gap: "4px" })}>
-                {daysInSelectedMonth.map((d, i) => {
-                  const maxProfit = Math.max(...daysInSelectedMonth.map(ms => ms.profit), 5);
-                  const height = (d.profit / maxProfit) * 100;
-                  return (
-                    <div key={i} className={css({ flex: 1, position: "relative", h: "full", display: "flex", alignItems: "flex-end" })} title={`${d.day}: ${d.profit.toFixed(2)}%`}>
-                      <div className={css({ w: "full", bg: "var(--foreground)", borderRadius: "2px", opacity: 0.6, minH: d.profit > 0 ? "2px" : 0 })} style={{ height: `${height}%` }} />
-                      {i % 5 === 0 && <span className={css({ position: "absolute", bottom: "-20px", left: "50%", transform: "translateX(-50%)", fontSize: "9px", fontWeight: "700", color: "var(--secondary-text)" })}>{d.label}</span>}
-                    </div>
-                  );
-                })}
+              <div className={css({ position: "relative", h: "120px", w: "full" })}>
+                {/* Horizontal grid lines */}
+                <div className={css({ position: "absolute", inset: 0, display: "flex", flexDirection: "column", justifyContent: "space-between", pointerEvents: "none" })}>
+                  {[0, 1, 2, 3].map(i => <div key={i} className={css({ w: "full", h: "1px", bg: "var(--border-color)", opacity: 0.3 })} />)}
+                </div>
+                <div className={flex({ align: "flex-end", justify: "space-between", h: "full", gap: "4px", position: "relative", zIndex: 1 })}>
+                  {daysInSelectedMonth.map((d, i) => {
+                    const maxProfit = Math.max(...daysInSelectedMonth.map(ms => ms.profit), 5);
+                    const height = (d.profit / maxProfit) * 100;
+                    return (
+                      <div key={i} className={css({ flex: 1, position: "relative", h: "full", display: "flex", alignItems: "flex-end" })} title={`${d.day}: ${d.profit.toFixed(2)}%`}>
+                        <div className={css({ w: "full", bg: "var(--foreground)", borderRadius: "2px", opacity: 0.6, minH: d.profit > 0 ? "2px" : 0 })} style={{ height: `${height}%` }} />
+                        {i % 5 === 0 && <span className={css({ position: "absolute", bottom: "-20px", left: "50%", transform: "translateX(-50%)", fontSize: "9px", fontWeight: "700", color: "var(--secondary-text)" })}>{d.label}</span>}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </section>
           </div>
