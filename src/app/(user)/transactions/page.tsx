@@ -30,7 +30,6 @@ export default async function TransactionsPage({
 
   const bankIds = getArrayParam(params.bankId);
   const cardIds = getArrayParam(params.cardId);
-  const merchantName = params.merchantName as string || "";
 
   // Fetch options for filters
   const myCards = await db
@@ -54,16 +53,6 @@ export default async function TransactionsPage({
     bankId: c.bankId 
   }));
 
-  // Get unique merchants for this user
-  const userMerchants = await db
-    .select({ name: transactions.merchantName })
-    .from(transactions)
-    .where(eq(transactions.userId, session.user.id!))
-    .groupBy(transactions.merchantName)
-    .orderBy(asc(transactions.merchantName));
-  
-  const merchantOptions = userMerchants.map(m => ({ value: m.name, label: m.name }));
-
   // Build query with filters
   const conditions = [eq(transactions.userId, session.user.id!)];
   
@@ -84,8 +73,6 @@ export default async function TransactionsPage({
       conditions.push(eq(transactions.userCardId, -1)); // No matches
     }
   }
-
-  if (merchantName) conditions.push(eq(transactions.merchantName, merchantName));
 
   const history = await db
     .select({
@@ -153,13 +140,11 @@ export default async function TransactionsPage({
         <TransactionFilters 
           bankOptions={bankOptions}
           allCards={cardOptions}
-          merchantOptions={merchantOptions}
           initialFilters={{
             startDate,
             endDate,
             bankIds,
-            cardIds,
-            merchantName
+            cardIds
           }}
         />
 

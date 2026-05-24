@@ -294,6 +294,7 @@ export default function TransactionForm({ cards, merchants, mccs, templates = []
         if (initialData) {
           await updateTransaction(initialData.id, formData);
           toast("Операция успешно обновлена", "success");
+          router.push("/transactions");
         } else {
           await createTransaction(formData);
           if (saveAsTemplate && templateName) {
@@ -307,8 +308,31 @@ export default function TransactionForm({ cards, merchants, mccs, templates = []
             await createTransactionTemplate(templateData);
           }
           toast("Операция успешно добавлена", "success");
+          
+          // Clear all fields except card
+          setAmount("");
+          setPaidAmount("");
+          setStoredShare("");
+          setSelectedMerchantName("");
+          setSelectedMcc("");
+          setSelectedSpendingCategoryId("");
+          setSplits([{ categoryId: "", amount: "" }]);
+          setIsNewMerchant(false);
+          setSuggestedMccs([]);
+          setSaveAsTemplate(false);
+          setTemplateName("");
+          
+          // Keep manualAdjustment field reset if it was used (it's uncontrolled, so we rely on revalidation or manual fix if needed)
+          // But since it's a form action, the native form reset or state clearing is better.
+          const form = document.querySelector('form') as HTMLFormElement;
+          if (form) {
+            // We only want to clear specific native fields, not everything if we want to keep the card.
+            // Actually, clearing state is enough for controlled components. 
+            // For manualAdjustment (uncontrolled), let's find it.
+            const adjInput = form.querySelector('input[name="manualAdjustment"]') as HTMLInputElement;
+            if (adjInput) adjInput.value = "";
+          }
         }
-        router.push("/transactions");
         router.refresh();
       } catch (error) {
         toast(error instanceof Error ? error.message : "Произошла ошибка", "error");

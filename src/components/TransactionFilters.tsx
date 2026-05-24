@@ -28,20 +28,17 @@ interface MerchantOption {
 interface TransactionFiltersProps {
   bankOptions: BankOption[];
   allCards: CardOption[];
-  merchantOptions: MerchantOption[];
   initialFilters: {
     startDate: string;
     endDate: string;
     bankIds: string[];
     cardIds: string[];
-    merchantName: string;
   };
 }
 
 export default function TransactionFilters({ 
   bankOptions, 
   allCards, 
-  merchantOptions,
   initialFilters 
 }: TransactionFiltersProps) {
   const router = useRouter();
@@ -51,7 +48,6 @@ export default function TransactionFilters({
   const [endDate, setEndDate] = useState(initialFilters.endDate);
   const [selectedBankIds, setSelectedBankIds] = useState<string[]>(initialFilters.bankIds);
   const [selectedCardIds, setSelectedCardIds] = useState<string[]>(initialFilters.cardIds);
-  const [merchantName, setMerchantName] = useState(initialFilters.merchantName);
 
   // Filter cards based on selected banks
   const availableCards = useMemo(() => {
@@ -93,7 +89,6 @@ export default function TransactionFilters({
     const params = new URLSearchParams();
     if (startDate) params.set("startDate", startDate);
     if (endDate) params.set("endDate", endDate);
-    if (merchantName) params.set("merchantName", merchantName);
     
     selectedBankIds.forEach(id => params.append("bankId", id));
     selectedCardIds.forEach(id => params.append("cardId", id));
@@ -108,7 +103,7 @@ export default function TransactionFilters({
   return (
     <section className="sber-card" style={{ marginBottom: "24px", padding: "16px" }}>
       <form onSubmit={handleApply} className={stack({ gap: "16px" })}>
-        <div className={css({ display: "grid", gridTemplateColumns: { base: "1fr", md: "repeat(auto-fit, minmax(240px, 1fr))" }, gap: "16px" })}>
+        <div className={css({ display: "grid", gridTemplateColumns: { base: "1fr", md: "repeat(auto-fit, minmax(280px, 1fr))" }, gap: "16px" })}>
           {/* Dates */}
           <div className={flex({ gap: "10px" })}>
             <div className={stack({ gap: "4px", flex: "1" })}>
@@ -143,18 +138,6 @@ export default function TransactionFilters({
                 placeholder="Все карты"
               />
             </div>
-          </div>
-
-          {/* Merchant */}
-          <div className={stack({ gap: "4px" })}>
-            <label className="sber-label">МАГАЗИН</label>
-            <SearchableSelect 
-              name="merchantName" 
-              options={merchantOptions}
-              defaultValue={merchantName}
-              placeholder="Все магазины"
-              onChange={setMerchantName}
-            />
           </div>
         </div>
 
