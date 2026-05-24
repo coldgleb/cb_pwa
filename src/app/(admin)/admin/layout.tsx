@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { ReactNode } from "react";
 import { css } from "../../../../styled-system/css";
 import { flex, container, stack } from "../../../../styled-system/patterns";
-import { Landmark, CreditCard, Hash, LayoutDashboard, Store, RefreshCw } from "lucide-react";
+import { Landmark, CreditCard, Hash, LayoutDashboard, Store, RefreshCw, Tag } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +19,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
     { label: "Карты", href: "/admin/bank-cards", icon: CreditCard },
     { label: "МСС", href: "/admin/mcc", icon: Hash },
     { label: "Мерчанты", href: "/admin/merchants", icon: Store },
+    { label: "Категории", href: "/admin/spending-categories", icon: Tag },
     { label: "Пересчет", href: "/admin/recalculate", icon: RefreshCw },
   ];
 

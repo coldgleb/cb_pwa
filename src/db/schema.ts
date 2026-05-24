@@ -10,7 +10,7 @@ export const users = sqliteTable("users", {
   password: text("password"),
   emailVerified: integer("email_verified", { mode: "timestamp_ms" }),
   image: text("image"),
-  role: text("role").default("user").notNull(),
+  role: text("role").default("user").notNull().$defaultFn(() => "user"),
   createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
 });
 
@@ -131,6 +131,15 @@ export const merchants = sqliteTable("merchants", {
   additionalMccs: text("additional_mccs").notNull().default("0000"),
   logo: text("logo"),
   website: text("website"),
+  categoryName: text("category_name"),
+  spendingCategoryId: integer("spending_category_id").references(() => spendingCategories.id),
+});
+
+export const spendingCategories = sqliteTable("spending_categories", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  parentId: integer("parent_id").references((): any => spendingCategories.id),
+  sortOrder: integer("sort_order").default(0).notNull(),
 });
 
 export const bankExclusions = sqliteTable("bank_exclusions", {
@@ -164,4 +173,24 @@ export const transactions = sqliteTable("transactions", {
   cashbackPercentage: real("cashback_percentage"),
   manualCashbackAdjustment: real("manual_cashback_adjustment").default(0).notNull(),
   categoryId: integer("category_id").references(() => bankCategories.id),
+  customCategoryName: text("custom_category_name"),
+  spendingCategoryId: integer("spending_category_id").references(() => spendingCategories.id),
+});
+
+export const transactionTemplates = sqliteTable("transaction_templates", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: text("user_id").references(() => users.id).notNull(),
+  templateName: text("template_name").notNull(),
+  amount: real("amount").notNull(),
+  merchantName: text("merchant_name").notNull(),
+  mccCode: text("mcc_code").references(() => mccCodes.code),
+  userCardId: integer("user_card_id").references(() => userCards.id),
+  spendingCategoryId: integer("spending_category_id").references(() => spendingCategories.id),
+});
+
+export const transactionCategorySplits = sqliteTable("transaction_category_splits", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  transactionId: integer("transaction_id").references(() => transactions.id, { onDelete: "cascade" }).notNull(),
+  spendingCategoryId: integer("spending_category_id").references(() => spendingCategories.id).notNull(),
+  amount: real("amount").notNull(),
 });

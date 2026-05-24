@@ -738,6 +738,45 @@ export async function recalculateTransactionsForMerchantNames(names: string[]) {
     .where(inArray(transactions.merchantName, names));
   
   await recalculateTransactions(affectedTransactions);
+  await syncSpendingCategoriesForMerchant(names);
+}
+
+export async function syncSpendingCategoriesForMerchant(names: string[]) {
+  if (names.length === 0) return;
+
+  const merchantsData = await db
+    .select({ name: merchants.name, spendingCategoryId: merchants.spendingCategoryId })
+    .from(merchants)
+    .where(and(inArray(merchants.name, names), sql`${merchants.spendingCategoryId} IS NOT NULL`));
+
+  for (const merchant of merchantsData) {
+    if (merchant.spendingCategoryId) {
+      await db.update(transactions)
+        .set({ spendingCategoryId: merchant.spendingCategoryId })
+        .where(and(
+          sql`lower(${transactions.merchantName}) = lower(${merchant.name})`,
+          isNull(transactions.spendingCategoryId)
+        ));
+    }
+  }
+}
+
+export async function syncAllTransactionsSpendingCategories() {
+  const merchantsData = await db
+    .select({ name: merchants.name, spendingCategoryId: merchants.spendingCategoryId })
+    .from(merchants)
+    .where(sql`${merchants.spendingCategoryId} IS NOT NULL`);
+
+  for (const merchant of merchantsData) {
+    if (merchant.spendingCategoryId) {
+      await db.update(transactions)
+        .set({ spendingCategoryId: merchant.spendingCategoryId })
+        .where(and(
+          sql`lower(${transactions.merchantName}) = lower(${merchant.name})`,
+          isNull(transactions.spendingCategoryId)
+        ));
+    }
+  }
 }
 
 export async function recalculateTransactionsForBankCard(bankCardId: number) {

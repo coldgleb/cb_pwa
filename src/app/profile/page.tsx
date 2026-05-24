@@ -24,7 +24,14 @@ export default async function ProfilePage() {
 
   return (
     <div className={css({ minH: "100vh", bg: "var(--background)" })}>
-      <div className="sber-container">
+      <div className={css({ 
+        w: "full", 
+        maxW: { base: "512px", lg: "1100px" }, 
+        mx: "auto", 
+        px: "20px", 
+        py: "32px",
+        pb: "calc(80px + env(safe-area-inset-bottom))"
+      })}>
         
         <header className={flex({ align: "center", gap: "16px", mb: "32px" })}>
           <a href="/" className={css({ w: "40px", h: "40px", bg: "var(--card-bg)", borderRadius: "full", shadow: "sm", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--secondary-text)", border: "1px solid", borderColor: "var(--border-color)", cursor: "pointer" })}>

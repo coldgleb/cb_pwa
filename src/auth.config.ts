@@ -2,6 +2,7 @@ import type { NextAuthConfig } from "next-auth";
 
 export const authConfig = {
   trustHost: true,
+  secret: process.env.AUTH_SECRET,
   session: {
     strategy: "jwt",
   },
@@ -14,6 +15,8 @@ export const authConfig = {
       const isOnAdmin = nextUrl.pathname.startsWith("/admin");
       const isOnUserArea = nextUrl.pathname.startsWith("/cards") || nextUrl.pathname.startsWith("/transactions");
       
+      console.log(`[AUTH] Middleware Path: ${nextUrl.pathname}, LoggedIn: ${isLoggedIn}, User: ${auth?.user?.email}`);
+
       if (isOnAdmin || isOnUserArea) {
         if (isLoggedIn) return true;
         return false; // Redirect to login

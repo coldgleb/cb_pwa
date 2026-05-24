@@ -15,6 +15,7 @@ import { getIconUrl } from "@/lib/utils/icons";
 import CategoryActions from "@/components/admin/CategoryActions";
 import MccImportFromUrl from "@/components/admin/MccImportFromUrl";
 import RecalculateCardTransactionsButton from "@/components/admin/RecalculateCardTransactionsButton";
+import DatePicker from "@/components/DatePicker";
 
 export default async function EditBankCardPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -203,7 +204,7 @@ export default async function EditBankCardPage({ params }: { params: Promise<{ i
                   </div>
                   <div className={stack({ gap: "8px" })}>
                     <label className="sber-label">ДЕЙСТВУЕТ С ДАТЫ</label>
-                    <input name="startDate" type="date" required className="sber-input" />
+                    <DatePicker name="startDate" required />
                   </div>
                 </div>
                 <button type="submit" className="sber-button" style={{ backgroundColor: "#6366f1" }}>
@@ -257,11 +258,11 @@ export default async function EditBankCardPage({ params }: { params: Promise<{ i
                 <div className={flex({ gap: "12px", wrap: "wrap" })}>
                   <div className={stack({ gap: "6px", flex: 1, minW: "140px" })}>
                     <label className="sber-label">Действует С</label>
-                    <input name="startDate" type="date" defaultValue={today} required className="sber-input" />
+                    <DatePicker name="startDate" defaultValue={today} required />
                   </div>
                   <div className={stack({ gap: "6px", flex: 1, minW: "140px" })}>
                     <label className="sber-label">Действует ПО</label>
-                    <input name="endDate" type="date" className="sber-input" />
+                    <DatePicker name="endDate" />
                   </div>
                 </div>
                 
@@ -409,11 +410,11 @@ export default async function EditBankCardPage({ params }: { params: Promise<{ i
                     <div className={flex({ gap: "12px", wrap: "wrap" })}>
                       <div className={stack({ gap: "4px", flex: 1, minW: "120px" })}>
                         <label className="sber-label" style={{ fontSize: "10px" }}>Действует С</label>
-                        <input name="startDate" type="date" defaultValue={cat.startDate} className={css({ p: "8px", borderRadius: "10px", border: "1px solid var(--border-color)", fontSize: "14px", w: "full", bg: "var(--input-bg)", color: "var(--foreground)" })} />
+                        <DatePicker name="startDate" defaultValue={cat.startDate} />
                       </div>
                       <div className={stack({ gap: "4px", flex: 1, minW: "120px" })}>
                         <label className="sber-label" style={{ fontSize: "10px" }}>Действует ПО</label>
-                        <input name="endDate" type="date" defaultValue={cat.endDate || ""} className={css({ p: "8px", borderRadius: "10px", border: "1px solid var(--border-color)", fontSize: "14px", w: "full", bg: "var(--input-bg)", color: "var(--foreground)" })} />
+                        <DatePicker name="endDate" defaultValue={cat.endDate || ""} />
                       </div>
                     </div>
 

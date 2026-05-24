@@ -1,0 +1,1 @@
+ALTER TABLE `transaction_templates` ADD `spending_category_id` integer REFERENCES spending_categories(id);

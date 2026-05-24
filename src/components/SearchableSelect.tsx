@@ -8,6 +8,7 @@ import { Search, ChevronDown, Check, Plus } from "lucide-react";
 interface Option {
   value: string;
   label: string;
+  disabled?: boolean;
 }
 
 interface SearchableSelectProps {
@@ -66,6 +67,7 @@ export default function SearchableSelect({
   }, []);
 
   const handleSelect = (option: Option) => {
+    if (option.disabled) return;
     if (value === undefined) {
       setInnerValue(option.value);
     }
@@ -178,21 +180,24 @@ export default function SearchableSelect({
                     px: "12px", 
                     py: { base: "14px", md: "10px" }, 
                     borderRadius: "10px", 
-                    cursor: "pointer", 
+                    cursor: opt.disabled ? "default" : "pointer", 
                     WebkitTapHighlightColor: "transparent",
-                    _hover: { bg: "var(--surface-secondary)" },
-                    _active: { bg: "var(--border-color)" },
-                    bg: currentSelection?.value === opt.value ? "rgba(33, 160, 56, 0.1)" : "transparent"
+                    _hover: opt.disabled ? {} : { bg: "var(--surface-secondary)" },
+                    _active: opt.disabled ? {} : { bg: "var(--border-color)" },
+                    bg: currentSelection?.value === opt.value ? "rgba(33, 160, 56, 0.1)" : "transparent",
+                    opacity: opt.disabled ? 0.6 : 1
                   })}
                 >
                   <span className={css({ 
                     fontSize: "14px", 
-                    fontWeight: currentSelection?.value === opt.value ? "700" : "500",
-                    color: currentSelection?.value === opt.value ? "var(--sber-green)" : "var(--foreground)" 
+                    fontWeight: opt.disabled ? "800" : (currentSelection?.value === opt.value ? "700" : "500"),
+                    color: currentSelection?.value === opt.value ? "var(--sber-green)" : "var(--foreground)",
+                    textTransform: opt.disabled ? "uppercase" : "none",
+                    letterSpacing: opt.disabled ? "0.02em" : "normal"
                   })}>
                     {opt.label}
                   </span>
-                  {currentSelection?.value === opt.value && <Check size={16} className={css({ color: "var(--sber-green)" })} />}
+                  {currentSelection?.value === opt.value && !opt.disabled && <Check size={16} className={css({ color: "var(--sber-green)" })} />}
                 </div>
               ))
             ) : (

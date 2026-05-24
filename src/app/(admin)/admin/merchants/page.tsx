@@ -1,9 +1,10 @@
 import { db } from "@/db";
 import { merchants, mccCodes } from "@/db/schema";
 import { createMerchant, updateMerchant, deleteMerchant } from "@/lib/actions/merchants";
+import { getSpendingCategoryOptions } from "@/lib/actions/spending-categories";
 import { css } from "../../../../../styled-system/css";
-import { stack, flex, wrap, grid } from "../../../../../styled-system/patterns";
-import { Plus, Store, Trash2, Tag, Hash, Save, Globe } from "lucide-react";
+import { stack, flex, grid } from "../../../../../styled-system/patterns";
+import { Plus, Store, Save } from "lucide-react";
 import { asc } from "drizzle-orm";
 import SearchableSelect from "@/components/SearchableSelect";
 import { getIconUrl } from "@/lib/utils/icons";
@@ -14,6 +15,7 @@ import MerchantFormWrapper from "@/components/admin/MerchantFormWrapper";
 export default async function MerchantsPage() {
   const allMerchants = await db.select().from(merchants).orderBy(asc(merchants.name));
   const allMccs = await db.select({ code: mccCodes.code, name: mccCodes.description }).from(mccCodes).orderBy(asc(mccCodes.code));
+  const categoryOptions = await getSpendingCategoryOptions();
 
   const mccOptions = allMccs.map(mcc => ({
     value: mcc.code,
@@ -78,6 +80,15 @@ export default async function MerchantsPage() {
           </div>
 
           <div className={stack({ gap: "6px" })}>
+            <label className="sber-label">КАТЕГОРИЯ (ГЛОБАЛЬНАЯ)</label>
+            <SearchableSelect 
+              name="spendingCategoryId" 
+              options={categoryOptions}
+              placeholder="Выберите категорию для статистики..."
+            />
+          </div>
+
+          <div className={stack({ gap: "6px" })}>
             <label className="sber-label">ДОПОЛНИТЕЛЬНЫЕ MCC (ПРОИЗВОЛЬНЫЙ ТЕКСТ)</label>
             <textarea 
               name="additionalMccs" 
@@ -128,14 +139,25 @@ export default async function MerchantsPage() {
                           required 
                           className={css({ fontWeight: "700", fontSize: "16px", color: "var(--foreground)", border: "none", bg: "transparent", borderBottom: "1px dashed", borderColor: "#e2e8f0", w: "full", _focus: { borderColor: "sberGreen", outline: "none" } })}
                         />
-                        <div className={stack({ gap: "2px", mt: "4px", w: "full", maxW: { base: "200px", sm: "300px" } })}>
-                          <label className={css({ fontSize: "9px", fontWeight: "800", color: "secondaryText" })}>ОСНОВНОЙ MCC</label>
-                          <SearchableSelect 
-                            name="mainMcc" 
-                            options={mccOptions}
-                            required 
-                            defaultValue={merchant.mainMcc}
-                          />
+                        <div className={grid({ columns: 2, gap: "8px", mt: "4px" })}>
+                          <div className={stack({ gap: "2px" })}>
+                            <label className={css({ fontSize: "9px", fontWeight: "800", color: "secondaryText" })}>MCC</label>
+                            <SearchableSelect 
+                              name="mainMcc" 
+                              options={mccOptions}
+                              required 
+                              defaultValue={merchant.mainMcc}
+                            />
+                          </div>
+                          <div className={stack({ gap: "2px" })}>
+                            <label className={css({ fontSize: "9px", fontWeight: "800", color: "secondaryText" })}>КАТЕГОРИЯ</label>
+                            <SearchableSelect 
+                              name="spendingCategoryId" 
+                              options={categoryOptions}
+                              defaultValue={merchant.spendingCategoryId?.toString()}
+                              placeholder="Категория"
+                            />
+                          </div>
                         </div>
                       </div>
                     </div>

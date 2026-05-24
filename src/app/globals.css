@@ -13,7 +13,7 @@
   --separator: rgba(0,0,0,0.1);
 }
 
-[data-theme='dark'] {
+.dark {
   --background: #0a0a0a;
   --foreground: #f2f2f7;
   --secondary-text: #8e8e93;
@@ -53,7 +53,7 @@ a {
 
 .sber-container {
   width: 100%;
-  max-width: 512px;
+  max-width: 1100px;
   margin: 0 auto;
   padding: 32px 20px calc(80px + env(safe-area-inset-bottom)) 20px;
 }

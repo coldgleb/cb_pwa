@@ -1,12 +1,15 @@
 "use client";
 
-import { useState, useMemo, useTransition } from "react";
+import { useState, useMemo, useTransition, useEffect } from "react";
 import { css } from "../../styled-system/css";
 import { stack, flex } from "../../styled-system/patterns";
-import { ShoppingBag, Users, Save } from "lucide-react";
+import { ShoppingBag, Users, Save, X, PlusCircle, Calendar, Clock } from "lucide-react";
 import SearchableSelect from "./SearchableSelect";
+import DatePicker from "./DatePicker";
+import TimePicker from "./TimePicker";
 import { createTransaction, updateTransaction } from "@/lib/actions/transactions";
 import { getMerchantMccSuggestions } from "@/lib/actions/merchants";
+import { createTransactionTemplate, deleteTransactionTemplate } from "@/lib/actions/transaction-templates";
 import { useRouter } from "next/navigation";
 import { useToast } from "./Toast";
 
@@ -22,6 +25,8 @@ interface Merchant {
   name: string;
   mainMcc: string;
   additionalMccs: string;
+  categoryName: string | null;
+  spendingCategoryId: number | null;
 }
 
 interface MccCode {
@@ -29,10 +34,27 @@ interface MccCode {
   description: string;
 }
 
+interface TransactionTemplate {
+  id: number;
+  templateName: string;
+  amount: number;
+  merchantName: string;
+  mccCode: string | null;
+  userCardId: number | null;
+  spendingCategoryId: number | null;
+}
+
+interface Option {
+  value: string;
+  label: string;
+}
+
 interface TransactionFormProps {
   cards: CardOption[];
   merchants: Merchant[];
   mccs: MccCode[];
+  templates?: TransactionTemplate[];
+  spendingCategories?: Option[];
   initialData?: {
     id: number;
     amount: number;
@@ -42,7 +64,10 @@ interface TransactionFormProps {
     userCardId: number;
     transactionDate: Date;
     manualCashbackAdjustment: number;
+    customCategoryName: string | null;
+    spendingCategoryId: number | null;
   };
+  initialSplits?: { categoryId: number; amount: number }[];
 }
 
 const formatDateForInput = (d: Date, isUTC: boolean) => {
@@ -60,7 +85,7 @@ const formatTimeForInput = (d: Date, isUTC: boolean) => {
   return `${hours}:${minutes}`;
 };
 
-export default function TransactionForm({ cards, merchants, mccs, initialData }: TransactionFormProps) {
+export default function TransactionForm({ cards, merchants, mccs, templates = [], spendingCategories = [], initialData, initialSplits = [] }: TransactionFormProps) {
   const router = useRouter();
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
@@ -75,8 +100,19 @@ export default function TransactionForm({ cards, merchants, mccs, initialData }:
 
   const [selectedMerchantName, setSelectedMerchantName] = useState(initialData?.merchantName || "");
   const [selectedMcc, setSelectedMcc] = useState(initialData?.mccCode || "");
+  const [selectedSpendingCategoryId, setSelectedSpendingCategoryId] = useState(initialData?.spendingCategoryId?.toString() || "");
+  const [splits, setSplits] = useState<{ categoryId: string; amount: string }[]>(
+    initialSplits.length > 0 
+      ? initialSplits.map(s => ({ categoryId: s.categoryId.toString(), amount: s.amount.toString() }))
+      : [{ categoryId: initialData?.spendingCategoryId?.toString() || "", amount: initialData?.amount?.toString() || "" }]
+  );
+  const [selectedUserCardId, setSelectedUserCardId] = useState(initialData?.userCardId?.toString() || "");
   const [suggestedMccs, setSuggestedMccs] = useState<string[]>([]);
   const [isSearchingMcc, setIsSearchingMcc] = useState(false);
+  const [isNewMerchant, setIsNewMerchant] = useState(false);
+
+  const [saveAsTemplate, setSaveAsTemplate] = useState(false);
+  const [templateName, setTemplateName] = useState("");
 
   const merchantOptions = useMemo(() => 
     merchants.map(m => ({ value: m.name, label: m.name })), 
@@ -114,10 +150,22 @@ export default function TransactionForm({ cards, merchants, mccs, initialData }:
     
     const m = merchants.find(merch => merch.name === name);
     if (m) {
+      setIsNewMerchant(false);
       setSelectedMcc(m.mainMcc);
+      const catId = m.spendingCategoryId?.toString() || "";
+      setSelectedSpendingCategoryId(catId);
+      
+      // Update first split category
+      setSplits(prev => {
+        const next = [...prev];
+        next[0] = { ...next[0], categoryId: catId };
+        return next;
+      });
+      
       setSuggestedMccs([]);
     } else if (name) {
       // New merchant, try to find suggestions
+      setIsNewMerchant(true);
       setIsSearchingMcc(true);
       try {
         const suggestions = await getMerchantMccSuggestions(name);
@@ -134,6 +182,73 @@ export default function TransactionForm({ cards, merchants, mccs, initialData }:
     }
   };
 
+  const handleTemplateClick = (template: TransactionTemplate) => {
+    setAmount(template.amount.toString());
+    if (isSplit) setPaidAmount(template.amount.toString());
+    setSelectedMerchantName(template.merchantName);
+    setSelectedMcc(template.mccCode || "");
+    
+    const m = merchants.find(merch => merch.name === template.merchantName);
+    const catId = m?.spendingCategoryId?.toString() || template.spendingCategoryId?.toString() || "";
+    setSelectedSpendingCategoryId(catId);
+    
+    // Update first split
+    setSplits([{ categoryId: catId, amount: template.amount.toString() }]);
+    
+    if (template.userCardId) setSelectedUserCardId(template.userCardId.toString());
+    toast(`Применен шаблон "${template.templateName}"`, "success");
+  };
+
+  const addSplit = () => {
+    setSplits([...splits, { categoryId: "", amount: "" }]);
+  };
+
+  const removeSplit = (index: number) => {
+    setSplits(splits.filter((_, i) => i !== index));
+  };
+
+  const updateSplit = (index: number, field: "categoryId" | "amount", value: string) => {
+    const newSplits = [...splits];
+    newSplits[index] = { ...newSplits[index], [field]: value };
+    
+    // Auto-calculate the first category amount if it's not the one being changed
+    // or if we're changing any amount after the first one.
+    // The logic is: splits[0].amount = totalAmount - sum(splits[1...n].amount)
+    if (index > 0 && field === "amount") {
+      const totalAmount = parseFloat(amount) || 0;
+      const otherSplitsSum = newSplits.slice(1).reduce((sum, s) => sum + (parseFloat(s.amount) || 0), 0);
+      newSplits[0].amount = Math.max(0, totalAmount - otherSplitsSum).toFixed(2);
+    }
+    
+    setSplits(newSplits);
+  };
+
+  // Re-calculate first split when total amount changes
+  useEffect(() => {
+    if (splits.length > 0) {
+      const newSplits = [...splits];
+      const totalAmount = parseFloat(amount) || 0;
+      const otherSplitsSum = newSplits.slice(1).reduce((sum, s) => sum + (parseFloat(s.amount) || 0), 0);
+      newSplits[0].amount = Math.max(0, totalAmount - otherSplitsSum).toFixed(2);
+      setSplits(newSplits);
+    }
+  }, [amount]);
+
+  const handleDeleteTemplate = async (e: React.MouseEvent, id: number) => {
+    e.stopPropagation();
+    if (!confirm("Удалить этот шаблон?")) return;
+    
+    startTransition(async () => {
+      try {
+        await deleteTransactionTemplate(id);
+        toast("Шаблон удален", "success");
+        router.refresh();
+      } catch (error) {
+        toast("Ошибка при удалении шаблона", "error");
+      }
+    });
+  };
+
   async function action(formData: FormData) {
     const dateStr = formData.get("date") as string;
     const timeStr = formData.get("time") as string;
@@ -143,6 +258,37 @@ export default function TransactionForm({ cards, merchants, mccs, initialData }:
       formData.append("transactionDateIso", utcDate.toISOString());
     }
 
+    const totalSplitAmount = splits.reduce((sum, s) => sum + (parseFloat(s.amount) || 0), 0);
+    const mainAmount = parseFloat(amount) || 0;
+    
+    if (Math.abs(totalSplitAmount - mainAmount) > 0.01) {
+      toast(`Сумма категорий (${totalSplitAmount.toFixed(2)} ₽) не совпадает с суммой покупки (${mainAmount.toFixed(2)} ₽)`, "error");
+      return;
+    }
+
+    // New logic: Optional categories with reminder, unless it's a new merchant
+    const hasMainCategory = splits.length > 0 && splits[0].categoryId;
+    if (!hasMainCategory) {
+      if (isNewMerchant) {
+        toast("Для нового магазина необходимо выбрать категорию, чтобы она сохранилась как основная", "error");
+        return;
+      }
+      if (!confirm("Вы не выбрали категорию для статистики. Сохранить операцию без категории?")) {
+        return;
+      }
+    }
+
+    // Filter out splits with empty categories
+    const validSplits = splits.filter(s => s.categoryId && s.amount);
+    
+    if (validSplits.length > 0) {
+      formData.append("splits", JSON.stringify(validSplits));
+      formData.append("spendingCategoryId", validSplits[0].categoryId);
+    } else {
+      formData.append("splits", "[]");
+      formData.append("spendingCategoryId", "");
+    }
+
     startTransition(async () => {
       try {
         if (initialData) {
@@ -150,6 +296,16 @@ export default function TransactionForm({ cards, merchants, mccs, initialData }:
           toast("Операция успешно обновлена", "success");
         } else {
           await createTransaction(formData);
+          if (saveAsTemplate && templateName) {
+            const templateData = new FormData();
+            templateData.append("templateName", templateName);
+            templateData.append("amount", formData.get("amount") as string);
+            templateData.append("merchantName", formData.get("merchantName") as string);
+            templateData.append("mccCode", formData.get("mccCode") as string);
+            templateData.append("userCardId", formData.get("userCardId") as string);
+            templateData.append("spendingCategoryId", formData.get("spendingCategoryId") as string);
+            await createTransactionTemplate(templateData);
+          }
           toast("Операция успешно добавлена", "success");
         }
         router.push("/transactions");
@@ -180,14 +336,56 @@ export default function TransactionForm({ cards, merchants, mccs, initialData }:
 
   return (
     <section className="sber-card">
-      <div className={flex({ align: "center", gap: "10px", mb: "24px" })}>
-        <div className={css({ p: "6px", bg: "#3b82f6", borderRadius: "8px", color: "white" })}>
-          <ShoppingBag size={18} />
+      <div className={flex({ align: "center", justify: "space-between", mb: "24px" })}>
+        <div className={flex({ align: "center", gap: "10px" })}>
+          <div className={css({ p: "6px", bg: "#3b82f6", borderRadius: "8px", color: "white" })}>
+            <ShoppingBag size={18} />
+          </div>
+          <h2 className={css({ fontSize: "17px", fontWeight: "700", color: "var(--foreground)" })}>
+            {initialData ? "Редактирование" : "Детали операции"}
+          </h2>
         </div>
-        <h2 className={css({ fontSize: "17px", fontWeight: "700", color: "var(--foreground)" })}>
-          {initialData ? "Редактирование" : "Детали операции"}
-        </h2>
       </div>
+
+      {/* Templates Row */}
+      {!initialData && templates.length > 0 && (
+        <div className={stack({ gap: "8px", mb: "24px" })}>
+          <label className="sber-label">БЫСТРЫЙ ВВОД</label>
+          <div className={flex({ gap: "8px", wrap: "wrap" })}>
+            {templates.map(template => (
+              <div 
+                key={template.id}
+                onClick={() => handleTemplateClick(template)}
+                className={flex({ 
+                  align: "center", 
+                  gap: "6px", 
+                  px: "12px", 
+                  py: "8px", 
+                  bg: "var(--surface-secondary)", 
+                  border: "1px solid var(--border-color)", 
+                  borderRadius: "20px",
+                  cursor: "pointer",
+                  transition: "all 0.2s",
+                  _hover: { bg: "var(--border-color)" }
+                })}
+              >
+                <span className={css({ fontSize: "13px", fontWeight: "600" })}>{template.templateName}</span>
+                <span className={css({ fontSize: "11px", color: "var(--secondary-text)" })}>{template.amount} ₽</span>
+                <button 
+                  onClick={(e) => handleDeleteTemplate(e, template.id)}
+                  className={css({ 
+                    p: "2px", 
+                    color: "var(--secondary-text)", 
+                    _hover: { color: "red.500" } 
+                  })}
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <form action={action} className={stack({ gap: "24px" })}>
         
@@ -282,7 +480,8 @@ export default function TransactionForm({ cards, merchants, mccs, initialData }:
           <SearchableSelect 
             name="userCardId" 
             required 
-            defaultValue={initialData?.userCardId?.toString() || ""} 
+            value={selectedUserCardId}
+            onChange={setSelectedUserCardId}
             options={cards.map(card => ({
               value: card.id.toString(),
               label: `${card.bankName} ${card.cardName} ${card.lastFour ? `• ${card.lastFour}` : ''}`
@@ -298,10 +497,73 @@ export default function TransactionForm({ cards, merchants, mccs, initialData }:
             options={merchantOptions}
             required
             allowCustom
-            defaultValue={initialData?.merchantName}
+            value={selectedMerchantName}
             placeholder="Выберите торговую точку..."
             onChange={handleMerchantChange}
           />
+        </div>
+
+        <div className={stack({ gap: "6px" })}>
+          <label className="sber-label">КАТЕГОРИИ</label>
+          
+          <div className={stack({ gap: "12px" })}>
+            {splits.map((split, index) => (
+              <div key={index} className={flex({ gap: "8px", align: "flex-start" })}>
+                <div className={css({ flex: 1 })}>
+                  <SearchableSelect 
+                    name={`split_cat_${index}`}
+                    options={spendingCategories}
+                    value={split.categoryId}
+                    onChange={(val) => updateSplit(index, "categoryId", val)}
+                    placeholder="Категория"
+                  />
+                </div>
+                <div className={css({ w: "100px" })}>
+                  <input 
+                    type="number" 
+                    step="0.01" 
+                    value={split.amount}
+                    onChange={(e) => updateSplit(index, "amount", e.target.value)}
+                    placeholder="₽"
+                    readOnly={index === 0}
+                    className="sber-input"
+                    style={{ 
+                      padding: "12px", 
+                      fontSize: "14px",
+                      backgroundColor: index === 0 ? "var(--surface-secondary)" : undefined,
+                      cursor: index === 0 ? "not-allowed" : "text",
+                      opacity: index === 0 ? 0.8 : 1,
+                      borderStyle: index === 0 ? "dashed" : "solid"
+                    }}
+                  />
+                </div>
+                {index > 0 ? (
+                  <button 
+                    type="button" 
+                    onClick={() => removeSplit(index)}
+                    className={css({ p: "12px", color: "var(--secondary-text)", _hover: { color: "red.500" }, cursor: "pointer" })}
+                  >
+                    <X size={20} />
+                  </button>
+                ) : (
+                  <div className={css({ w: "44px" })} />
+                )}
+              </div>
+            ))}
+            <div className={flex({ justify: "space-between", align: "center" })}>
+              <button 
+                type="button" 
+                onClick={addSplit}
+                className={flex({ align: "center", gap: "6px", fontSize: "13px", fontWeight: "700", color: "sberGreen", cursor: "pointer", bg: "transparent", border: "none" })}
+              >
+                <PlusCircle size={16} /> ЕЩЕ КАТЕГОРИЯ
+              </button>
+            </div>
+          </div>
+          
+          <p className={css({ fontSize: "11px", color: "secondaryText", ml: "4px" })}>
+            Это ваши личные категории для статистики. Помогают, когда банк ошибся.
+          </p>
         </div>
 
         <div className={stack({ gap: "6px" })}>
@@ -320,20 +582,16 @@ export default function TransactionForm({ cards, merchants, mccs, initialData }:
         <div className={flex({ gap: "12px" })}>
           <div className={stack({ gap: "6px", flex: 1 })}>
             <label className="sber-label">ДАТА</label>
-            <input 
+            <DatePicker 
               name="date" 
-              type="date" 
               defaultValue={initialData?.transactionDate ? formatDateForInput(new Date(initialData.transactionDate), true) : formatDateForInput(new Date(), false)} 
-              className="sber-input" 
             />
           </div>
           <div className={stack({ gap: "6px", flex: 1 })}>
             <label className="sber-label">ВРЕМЯ</label>
-            <input 
+            <TimePicker 
               name="time" 
-              type="time" 
               defaultValue={initialData?.transactionDate ? formatTimeForInput(new Date(initialData.transactionDate), true) : formatTimeForInput(new Date(), false)} 
-              className="sber-input" 
             />
           </div>
         </div>
@@ -356,6 +614,38 @@ export default function TransactionForm({ cards, merchants, mccs, initialData }:
             Добавьте бонусы за сторонние акции или скорректируйте расчет банка
           </p>
         </div>
+
+        {/* Save as Template */}
+        {!initialData && (
+          <div className={stack({ gap: "12px", p: "16px", bg: "var(--surface-secondary)", borderRadius: "14px", border: "1px dashed var(--border-color)" })}>
+            <div 
+              onClick={() => setSaveAsTemplate(!saveAsTemplate)}
+              className={flex({ align: "center", gap: "8px", cursor: "pointer" })}
+            >
+              <div className={css({ 
+                w: "20px", h: "20px", border: "2px solid", borderColor: saveAsTemplate ? "sberGreen" : "var(--border-color)", 
+                borderRadius: "4px", display: "flex", align: "center", justify: "center", bg: saveAsTemplate ? "sberGreen" : "transparent",
+                transition: "all 0.2s"
+              })}>
+                {saveAsTemplate && <PlusCircle size={14} color="white" />}
+              </div>
+              <span className={css({ fontSize: "14px", fontWeight: "600" })}>Сохранить как шаблон</span>
+            </div>
+            
+            {saveAsTemplate && (
+              <div className={stack({ gap: "6px" })}>
+                <label className="sber-label">НАЗВАНИЕ ШАБЛОНА</label>
+                <input 
+                  type="text" 
+                  value={templateName}
+                  onChange={(e) => setTemplateName(e.target.value)}
+                  placeholder="Например: Метро или Кофе" 
+                  className="sber-input"
+                />
+              </div>
+            )}
+          </div>
+        )}
 
         <button type="submit" className="sber-button" style={{ marginTop: "8px" }} disabled={isPending}>
           {isPending ? "Сохранение..." : (initialData ? <><Save size={18} /> Сохранить изменения</> : "Записать покупку")}

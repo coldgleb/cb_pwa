@@ -50,7 +50,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ru" className={`${geistSans.variable} ${geistMono.variable}`} suppressHydrationWarning>
-      <body style={{ paddingBottom: 'calc(80px + env(safe-area-inset-bottom))' }}>
+      <body style={{ paddingBottom: 'calc(80px + env(safe-area-inset-bottom))' }} suppressHydrationWarning>
         <ThemeProvider>
           <ToastProvider>
             {children}

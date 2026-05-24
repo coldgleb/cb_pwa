@@ -7,6 +7,8 @@ import { eq, asc } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import TransactionForm from "@/components/TransactionForm";
+import { getTransactionTemplates } from "@/lib/actions/transaction-templates";
+import { getSpendingCategoryOptions } from "@/lib/actions/spending-categories";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +30,8 @@ export default async function NewTransactionPage() {
 
   const allMcc = await db.select().from(mccCodes).orderBy(asc(mccCodes.code));
   const allMerchants = await db.select().from(merchants).orderBy(asc(merchants.name));
+  const templates = await getTransactionTemplates();
+  const spendingCategories = await getSpendingCategoryOptions();
 
   return (
     <div className={css({ minH: "100vh", bg: "var(--background)" })}>
@@ -39,11 +43,13 @@ export default async function NewTransactionPage() {
           <h1 className={css({ fontSize: "24px", fontWeight: "800", color: "var(--foreground)" })}>Покупка</h1>
         </header>
 
-        <div className={stack({ gap: "40px" })}>
+        <div className={css({ maxW: "512px", mx: "auto", w: "full" })}>
           <TransactionForm 
             cards={myCards}
             merchants={allMerchants}
             mccs={allMcc}
+            templates={templates}
+            spendingCategories={spendingCategories}
           />
         </div>
       </div>

@@ -164,7 +164,7 @@ export default function SearchBestCard({ merchants, mccs }: { merchants: Merchan
             Результаты ({results.length})
           </h3>
           
-          <div className={stack({ gap: "12px" })}>
+          <div className={grid({ columns: { base: 1, sm: 2, lg: 3 }, gap: "12px" })}>
             {results.map((card, idx) => {
               const iconUrl = getIconUrl({ logo: card.bankLogo, website: card.bankWebsite, name: card.bankName });
               

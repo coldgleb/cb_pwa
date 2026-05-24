@@ -22,9 +22,15 @@ export async function getMerchantMccSuggestions(name: string) {
   return found || { mainMcc: "0000", additionalMccs: "0000" };
 }
 
-export async function ensureMerchantExists(name: string) {
+export async function ensureMerchantExists(name: string, spendingCategoryId?: number) {
   const [existing] = await db.select().from(merchants).where(eq(merchants.name, name)).limit(1);
-  if (existing) return existing;
+  if (existing) {
+    if (spendingCategoryId && existing.spendingCategoryId !== spendingCategoryId) {
+      await db.update(merchants).set({ spendingCategoryId }).where(eq(merchants.id, existing.id));
+      await recalculateTransactionsForMerchantNames([name]);
+    }
+    return existing;
+  }
 
   // Try to find MCCs externally
   const found = await findMccForMerchant(name);
@@ -36,7 +42,12 @@ export async function ensureMerchantExists(name: string) {
     name,
     mainMcc,
     additionalMccs,
+    spendingCategoryId: spendingCategoryId || null,
   }).returning();
+
+  if (spendingCategoryId) {
+    await recalculateTransactionsForMerchantNames([name]);
+  }
 
   return newMerchant;
 }
@@ -50,6 +61,8 @@ export async function createMerchant(formData: FormData) {
   const additionalMccsText = formData.get("additionalMccs") as string || "";
   const website = formData.get("website") as string;
   const logo = formData.get("logo") as string;
+  const spendingCategoryIdRaw = formData.get("spendingCategoryId") as string;
+  const spendingCategoryId = spendingCategoryIdRaw ? parseInt(spendingCategoryIdRaw) : null;
 
   const mainMcc = mainMccRaw?.match(/^\d{4}/)?.[0];
 
@@ -64,7 +77,10 @@ export async function createMerchant(formData: FormData) {
     additionalMccs: codes.join(","),
     website,
     logo,
+    spendingCategoryId,
   });
+
+  await recalculateTransactionsForMerchantNames([name]);
 
   revalidatePath("/admin/merchants");
 }
@@ -78,6 +94,8 @@ export async function updateMerchant(id: number, formData: FormData) {
   const additionalMccsText = formData.get("additionalMccs") as string || "";
   const website = formData.get("website") as string;
   const logo = formData.get("logo") as string;
+  const spendingCategoryIdRaw = formData.get("spendingCategoryId") as string;
+  const spendingCategoryId = spendingCategoryIdRaw ? parseInt(spendingCategoryIdRaw) : null;
 
   const mainMcc = mainMccRaw?.match(/^\d{4}/)?.[0];
 
@@ -95,6 +113,7 @@ export async function updateMerchant(id: number, formData: FormData) {
       additionalMccs: codes.join(","),
       website,
       logo,
+      spendingCategoryId,
     })
     .where(eq(merchants.id, id));
 

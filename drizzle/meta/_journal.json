@@ -22,6 +22,41 @@
       "when": 1777500454393,
       "tag": "0002_overrated_dark_beast",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1779627127037,
+      "tag": "0003_old_snowbird",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1779628227677,
+      "tag": "0004_fair_pretty_boy",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1779628480065,
+      "tag": "0005_gigantic_scorpion",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1779628804857,
+      "tag": "0006_new_wolverine",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1779629046570,
+      "tag": "0007_brief_micromacro",
+      "breakpoints": true
     }
   ]
 }

@@ -12,7 +12,14 @@ export default async function SearchPage() {
   const allMccs = await db.select().from(mccCodes).orderBy(asc(mccCodes.code));
 
   return (
-    <div className="sber-container">
+    <div className={css({ 
+      w: "full", 
+      maxW: { base: "512px", lg: "1100px" }, 
+      mx: "auto", 
+      px: "20px", 
+      py: "32px",
+      pb: "calc(80px + env(safe-area-inset-bottom))"
+    })}>
       <div className={stack({ gap: "32px" })}>
         <h1 className={css({ fontSize: "28px", fontWeight: "900", color: "var(--foreground)" })}>Выбор карты</h1>
         <SearchBestCard merchants={allMerchants} mccs={allMccs} />

@@ -1,5 +1,5 @@
 import { db } from "@/db";
-import { userCards, bankCards, banks, mccCodes, merchants, transactions } from "@/db/schema";
+import { userCards, bankCards, banks, mccCodes, merchants, transactions, transactionCategorySplits } from "@/db/schema";
 import { auth } from "@/auth";
 import { css } from "../../../../../../styled-system/css";
 import { container, flex, stack } from "../../../../../../styled-system/patterns";
@@ -7,6 +7,7 @@ import { eq, asc, and } from "drizzle-orm";
 import { redirect, notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import TransactionForm from "@/components/TransactionForm";
+import { getSpendingCategoryOptions } from "@/lib/actions/spending-categories";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +28,15 @@ export default async function EditTransactionPage({ params }: { params: Promise<
 
   if (!tx) notFound();
 
+  // Fetch splits
+  const splits = await db
+    .select({
+      categoryId: transactionCategorySplits.spendingCategoryId,
+      amount: transactionCategorySplits.amount,
+    })
+    .from(transactionCategorySplits)
+    .where(eq(transactionCategorySplits.transactionId, txId));
+
   const myCards = await db
     .select({
       id: userCards.id,
@@ -41,6 +51,7 @@ export default async function EditTransactionPage({ params }: { params: Promise<
 
   const allMcc = await db.select().from(mccCodes).orderBy(asc(mccCodes.code));
   const allMerchants = await db.select().from(merchants).orderBy(asc(merchants.name));
+  const spendingCategories = await getSpendingCategoryOptions();
 
   return (
     <div className={css({ minH: "100vh", bg: "var(--background)" })}>
@@ -52,12 +63,14 @@ export default async function EditTransactionPage({ params }: { params: Promise<
           <h1 className={css({ fontSize: "24px", fontWeight: "800", color: "var(--foreground)" })}>Редактировать покупку</h1>
         </header>
 
-        <div className={stack({ gap: "40px" })}>
+        <div className={css({ maxW: "512px", mx: "auto", w: "full" })}>
           <TransactionForm 
             cards={myCards}
             merchants={allMerchants}
             mccs={allMcc}
             initialData={tx}
+            initialSplits={splits}
+            spendingCategories={spendingCategories}
           />
         </div>
       </div>

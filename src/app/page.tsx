@@ -3,7 +3,7 @@ import { userCards, userCashbackRules, transactions, banks, bankCards, users } f
 import { auth, signOut } from "@/auth";
 import { loginUser } from "@/lib/actions/auth";
 import { css } from "../../styled-system/css";
-import { stack, flex } from "../../styled-system/patterns";
+import { stack, flex, grid } from "../../styled-system/patterns";
 import { eq, sql, and, gte } from "drizzle-orm";
 import { Wallet, LogOut, ShieldCheck, Percent } from "lucide-react";
 
@@ -93,7 +93,14 @@ export default async function Home() {
 
   return (
     <div className={css({ minH: "100vh", bg: "var(--background)" })}>
-      <div className="sber-container">
+      <div className={css({ 
+        w: "full", 
+        maxW: { base: "512px", lg: "1100px" }, 
+        mx: "auto", 
+        px: "20px", 
+        py: "32px",
+        pb: "calc(80px + env(safe-area-inset-bottom))"
+      })}>
         
         {/* Header */}
         <header className={flex({ justify: "space-between", align: "center", mb: "40px" })}>
@@ -120,7 +127,7 @@ export default async function Home() {
             <div className={stack({ gap: "24px" })}>
               <h2 className={css({ fontSize: "22px", fontWeight: "900", color: "var(--foreground)", mb: "8px" })}>Итоги месяца</h2>
               
-              <div className={stack({ gap: "16px" })}>
+              <div className={grid({ columns: { base: 1, sm: 2, lg: 3 }, gap: "16px" })}>
                 {/* Spent */}
                 <div className="sber-card">
                   <p className="sber-label" style={{ marginBottom: "8px" }}>ПОТРАЧЕНО В ЭТОМ МЕСЯЦЕ</p>
@@ -156,7 +163,7 @@ export default async function Home() {
               {bankStats.length > 0 && (
                 <section className={stack({ gap: "16px", mt: "8px" })}>
                   <h2 className={css({ fontSize: "18px", fontWeight: "800", color: "var(--foreground)", px: "4px" })}>По банкам</h2>
-                  <div className={stack({ gap: "12px" })}>
+                  <div className={grid({ columns: { base: 1, sm: 2, lg: 3 }, gap: "12px" })}>
                     {bankStats.map((bank, idx) => (
                       <div key={idx} className="sber-card" style={{ padding: "16px" }}>
                         <div className={flex({ justify: "space-between", align: "center" })}>

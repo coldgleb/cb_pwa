@@ -14,6 +14,8 @@ interface MultiSearchableSelectProps {
   name: string;
   options: Option[];
   defaultValue?: string[]; // Array of values
+  value?: string[]; // Controlled value
+  onChange?: (values: string[]) => void;
   placeholder?: string;
   required?: boolean;
 }
@@ -22,12 +24,16 @@ export default function MultiSearchableSelect({
   name,
   options,
   defaultValue = [],
+  value: controlledValue,
+  onChange,
   placeholder = "Выберите варианты...",
   required = false,
 }: MultiSearchableSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchValue, setSearchValue] = useState("");
-  const [selectedValues, setSelectedValues] = useState<Set<string>>(new Set(defaultValue));
+  const [internalSelectedValues, setInternalSelectedValues] = useState<Set<string>>(new Set(defaultValue));
+  
+  const selectedValues = controlledValue ? new Set(controlledValue) : internalSelectedValues;
   
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -58,7 +64,14 @@ export default function MultiSearchableSelect({
     } else {
       newSet.add(value);
     }
-    setSelectedValues(newSet);
+    
+    if (!controlledValue) {
+      setInternalSelectedValues(newSet);
+    }
+    
+    if (onChange) {
+      onChange(Array.from(newSet));
+    }
   };
 
   const getDisplayText = () => {
@@ -72,7 +85,9 @@ export default function MultiSearchableSelect({
 
   return (
     <div ref={containerRef} className={css({ position: "relative", w: "full", userSelect: "none" })}>
-      <input type="hidden" name={name} value={JSON.stringify(Array.from(selectedValues))} required={required && selectedValues.size === 0} />
+      {Array.from(selectedValues).map(val => (
+        <input key={val} type="hidden" name={name} value={val} />
+      ))}
       
       {/* Trigger / Input */}
       <div 

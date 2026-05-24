@@ -2,7 +2,7 @@ import { db } from "@/db";
 import { banks, bankCards, userCards } from "@/db/schema";
 import { auth } from "@/auth";
 import { css } from "../../../../styled-system/css";
-import { stack, flex } from "../../../../styled-system/patterns";
+import { stack, flex, grid } from "../../../../styled-system/patterns";
 import { eq, asc } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { ArrowLeft, Plus, ChevronRight, Landmark } from "lucide-react";
@@ -40,7 +40,14 @@ export default async function UserCardsPage() {
 
   return (
     <div className={css({ minH: "100vh", bg: "var(--background)" })}>
-      <div className="sber-container">
+      <div className={css({ 
+        w: "full", 
+        maxW: { base: "512px", lg: "1100px" }, 
+        mx: "auto", 
+        px: "20px", 
+        py: "32px",
+        pb: "calc(80px + env(safe-area-inset-bottom))"
+      })}>
         <header className={stack({ gap: "4px", mb: "32px" })}>
           <a href="/" className="sber-icon-button">
             <ArrowLeft size={20} />
@@ -64,9 +71,9 @@ export default async function UserCardsPage() {
           {/* Список карт */}
           <section className={stack({ gap: "16px" })}>
             <h3 className="sber-label">ВАШИ КАРТЫ</h3>
-            <div className={stack({ gap: "12px" })}>
+            <div className={grid({ columns: { base: 1, sm: 2, lg: 3 }, gap: "12px" })}>
               {myCards.length === 0 ? (
-                <div className={css({ py: "40px", textAlign: "center", color: "secondaryText", bg: "var(--card-bg)", borderRadius: "24px", border: "1px dashed", borderColor: "#e2e8f0", fontSize: "14px" })}>
+                <div className={css({ py: "40px", textAlign: "center", color: "secondaryText", bg: "var(--card-bg)", borderRadius: "24px", border: "1px dashed", borderColor: "#e2e8f0", fontSize: "14px", gridColumn: "1 / -1" })}>
                   Пока нет добавленных карт
                 </div>
               ) : (
