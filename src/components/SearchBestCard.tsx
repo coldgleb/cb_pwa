@@ -4,7 +4,7 @@ import { useState, useTransition, useMemo } from "react";
 import { findBestCardForPurchase, SearchResult } from "@/lib/actions/search";
 import { getMerchantMccSuggestions } from "@/lib/actions/merchants";
 import { css } from "../../styled-system/css";
-import { stack, flex } from "../../styled-system/patterns";
+import { stack, flex, grid } from "../../styled-system/patterns";
 import { Search, Info, Landmark, Save, Store } from "lucide-react";
 import SearchableSelect from "./SearchableSelect";
 import { useToast } from "./Toast";
