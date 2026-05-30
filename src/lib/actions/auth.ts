@@ -4,7 +4,11 @@ import { db } from "@/db";
 import { users } from "@/db/schema";
 import bcrypt from "bcryptjs";
 import { redirect } from "next/navigation";
-import { signIn, auth } from "@/auth";
+import { signIn, signOut, auth } from "@/auth";
+
+export async function logoutUser() {
+  await signOut({ redirectTo: "/" });
+}
 import { AuthError } from "next-auth";
 import { eq } from "drizzle-orm";
 
@@ -57,9 +61,9 @@ export async function loginUser(formData: FormData) {
     if (error instanceof AuthError) {
       switch (error.type) {
         case "CredentialsSignin":
-          return { error: "Invalid credentials." };
+          throw new Error("Invalid credentials.");
         default:
-          return { error: "Something went wrong." };
+          throw new Error("Something went wrong.");
       }
     }
     throw error; // Rethrow redirect error

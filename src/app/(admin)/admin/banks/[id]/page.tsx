@@ -31,11 +31,7 @@ export default async function EditBankPage({ params }: { params: Promise<{ id: s
       <div className={stack({ gap: "24px" })}>
         <section className="sber-card">
           <h2 className="sber-label" style={{ marginBottom: "20px" }}>ОСНОВНАЯ ИНФОРМАЦИЯ</h2>
-          <form action={async (formData) => {
-            "use server";
-            await updateBankWithId(formData);
-            redirect("/admin/banks");
-          }} className={stack({ gap: "24px" })}>
+          <form action={updateBankWithId} className={stack({ gap: "24px" })}>
             <div className={stack({ gap: "6px" })}>
               <label className="sber-label">НАЗВАНИЕ БАНКА</label>
               <input

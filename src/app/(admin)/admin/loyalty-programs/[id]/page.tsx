@@ -123,10 +123,7 @@ export default async function EditLoyaltyProgramPage({ params }: { params: Promi
             </div>
             
             <div className="sber-card">
-              <form action={async (formData) => {
-                "use server";
-                await updateProgramWithId(formData);
-              }} className={stack({ gap: "24px" })}>
+              <form action={updateProgramWithId} className={stack({ gap: "24px" })}>
                 <div className={stack({ gap: "8px" })}>
                   <label className="sber-label">БАНК</label>
                   <SearchableSelect 

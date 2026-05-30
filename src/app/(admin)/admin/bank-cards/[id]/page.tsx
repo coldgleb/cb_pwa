@@ -83,10 +83,7 @@ export default async function EditBankCardPage({ params }: { params: Promise<{ i
             </div>
             
             <div className="sber-card">
-              <form action={async (formData) => {
-                "use server";
-                await updateCardWithId(formData);
-              }} className={stack({ gap: "24px" })}>
+              <form action={updateCardWithId} className={stack({ gap: "24px" })}>
                 <div className={stack({ gap: "8px" })}>
                   <label className="sber-label">БАНК</label>
                   <SearchableSelect 

@@ -280,5 +280,28 @@ export async function syncMccCodes() {
   revalidatePath("/admin/mcc");
 }
 
+export async function addMccToCategoryAction(categoryId: number, formData: FormData) {
+  const session = await auth();
+  if (session?.user?.role !== "admin") throw new Error("Unauthorized");
+
+  const code = formData.get("mccCode") as string;
+  if (code) await linkMccToCategory(categoryId, code, "2000-01-01");
+
+  const mccText = formData.get("mccText") as string;
+  if (mccText) await linkMultipleMccToCategory(categoryId, mccText);
+
+  revalidatePath(`/admin/categories/${categoryId}/mcc`);
+}
+
+export async function addMerchantToCategoryAction(categoryId: number, formData: FormData) {
+  const session = await auth();
+  if (session?.user?.role !== "admin") throw new Error("Unauthorized");
+
+  const merchantId = parseInt(formData.get("merchantId") as string);
+  if (!isNaN(merchantId)) await linkMerchantToCategory(categoryId, merchantId);
+
+  revalidatePath(`/admin/categories/${categoryId}/mcc`);
+}
+
 import { bankCategoryMcc } from "@/db/schema";
 import { and, eq, sql, isNull } from "drizzle-orm";

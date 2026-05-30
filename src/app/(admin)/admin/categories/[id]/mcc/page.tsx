@@ -1,6 +1,6 @@
 import { db } from "@/db";
 import { bankCategories, mccCodes, bankCategoryMcc, bankCards, banks, merchants, bankCategoryMerchant, loyaltyPrograms } from "@/db/schema";
-import { linkMccToCategory, unlinkMccFromCategory, linkMerchantToCategory, unlinkMerchantFromCategory, linkMultipleMccToCategory } from "@/lib/actions/mcc";
+import { linkMccToCategory, unlinkMccFromCategory, linkMerchantToCategory, unlinkMerchantFromCategory, linkMultipleMccToCategory, addMccToCategoryAction, addMerchantToCategoryAction } from "@/lib/actions/mcc";
 import { css } from "../../../../../../../styled-system/css";
 import { stack, flex } from "../../../../../../../styled-system/patterns";
 import { eq, and, notInArray, isNull } from "drizzle-orm";
@@ -15,6 +15,9 @@ export default async function CategoryCompositionPage({ params }: { params: Prom
   const categoryId = parseInt(id);
 
   if (isNaN(categoryId)) notFound();
+
+  const addMccWithId = addMccToCategoryAction.bind(null, categoryId);
+  const addMerchantWithId = addMerchantToCategoryAction.bind(null, categoryId);
 
   const [category] = await db
     .select({
@@ -102,14 +105,7 @@ export default async function CategoryCompositionPage({ params }: { params: Prom
           </div>
           
           <div className="sber-card" style={{ padding: "16px" }}>
-            <form action={async (formData) => {
-              "use server";
-              const code = formData.get("mccCode") as string;
-              if (code) await linkMccToCategory(categoryId, code);
-
-              const mccText = formData.get("mccText") as string;
-              if (mccText) await linkMultipleMccToCategory(categoryId, mccText);
-            }} className={stack({ gap: "16px", mb: "24px" })}>
+            <form action={addMccWithId} className={stack({ gap: "16px", mb: "24px" })}>
               <div className={stack({ gap: "12px" })}>
                 <div className={flex({ gap: "8px", align: "end" })}>
                   <div className={stack({ gap: "4px", flex: 1 })}>
@@ -171,11 +167,7 @@ export default async function CategoryCompositionPage({ params }: { params: Prom
           </div>
           
           <div className="sber-card" style={{ padding: "16px" }}>
-            <form action={async (formData) => {
-              "use server";
-              const merchantId = parseInt(formData.get("merchantId") as string);
-              if (!isNaN(merchantId)) await linkMerchantToCategory(categoryId, merchantId);
-            }} className={stack({ gap: "12px", mb: "16px" })}>
+            <form action={addMerchantWithId} className={stack({ gap: "12px", mb: "16px" })}>
               <div className={flex({ gap: "8px", align: "end" })}>
                 <div className={stack({ gap: "4px", flex: 1 })}>
                   <label className={css({ fontSize: "10px", fontWeight: "800", color: "var(--secondary-text)", textTransform: "uppercase" })}>Добавить магазин</label>

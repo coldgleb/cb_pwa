@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { banks } from "@/db/schema";
 import { auth } from "@/auth";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
 export async function createBank(formData: FormData) {
   const session = await auth();
@@ -44,6 +45,7 @@ export async function updateBank(id: number, formData: FormData) {
     .where(eq(banks.id, id));
 
   revalidatePath("/admin/banks");
+  redirect("/admin/banks");
 }
 
 import { eq } from "drizzle-orm";

@@ -1,7 +1,7 @@
 import { db } from "@/db";
 import { userCards, transactions, banks, bankCards, users } from "@/db/schema";
-import { auth, signOut } from "@/auth";
-import { loginUser } from "@/lib/actions/auth";
+import { auth } from "@/auth";
+import { loginUser, logoutUser } from "@/lib/actions/auth";
 import { css } from "../../styled-system/css";
 import { stack, flex } from "../../styled-system/patterns";
 import { eq, sql, and } from "drizzle-orm";
@@ -158,7 +158,7 @@ export default async function Home() {
               </div>
               <div className={flex({ align: "center", gap: "10px" })}>
                 <ThemeIconButton />
-                <form action={async () => { "use server"; await signOut(); }}>
+                <form action={logoutUser}>
                   <button className={css({ p: "12px", color: "var(--secondary-text)", bg: "var(--card-bg)", borderRadius: "14px", cursor: "pointer", shadow: "sm", border: "1px solid", borderColor: "var(--border-color)", _hover: { color: "#ef4444" } })}>
                     <LogOut size={22} />
                   </button>
@@ -270,7 +270,7 @@ export default async function Home() {
               </div>
 
               <div className={stack({ gap: "24px", w: "full", maxWidth: "340px" })}>
-                <form action={async (formData) => { "use server"; await loginUser(formData); }} className={stack({ gap: "16px" })}>
+                <form action={loginUser} className={stack({ gap: "16px" })}>
                   <div className={stack({ gap: "8px" })}>
                     <label className="sber-label">EMAIL</label>
                     <input
