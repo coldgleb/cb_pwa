@@ -3,11 +3,10 @@ import { transactions, userCards, bankCards, banks, bankCategories, merchants, s
 import { auth } from "@/auth";
 import { css } from "../../../../styled-system/css";
 import { stack, container, flex, grid, wrap } from "../../../../styled-system/patterns";
-import { eq, desc, and, gte, lte, inArray, asc } from "drizzle-orm";
+import { eq, desc, and, gte, lte, inArray, asc, aliasedTable } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { ArrowLeft, PlusCircle } from "lucide-react";
 import TransactionsList from "@/components/TransactionsList";
-import TransactionFilters from "@/components/TransactionFilters";
 
 export const dynamic = "force-dynamic";
 
@@ -74,6 +73,10 @@ export default async function TransactionsPage({
     }
   }
 
+  const toUserCards = aliasedTable(userCards, "to_user_cards");
+  const toBankCards = aliasedTable(bankCards, "to_bank_cards");
+  const toBanks = aliasedTable(banks, "to_banks");
+
   const history = await db
     .select({
       id: transactions.id,
@@ -90,11 +93,18 @@ export default async function TransactionsPage({
       spendingCategoryName: spendingCategories.name,
       merchantLogo: merchants.logo,
       merchantWebsite: merchants.website,
+      type: transactions.type,
+      toUserCardId: transactions.toUserCardId,
+      toCardName: toBankCards.name,
+      toBankName: toBanks.name,
     })
     .from(transactions)
     .leftJoin(userCards, eq(transactions.userCardId, userCards.id))
     .leftJoin(bankCards, eq(userCards.bankCardId, bankCards.id))
     .leftJoin(banks, eq(bankCards.bankId, banks.id))
+    .leftJoin(toUserCards, eq(transactions.toUserCardId, toUserCards.id))
+    .leftJoin(toBankCards, eq(toUserCards.bankCardId, toBankCards.id))
+    .leftJoin(toBanks, eq(toBankCards.bankId, toBanks.id))
     .leftJoin(bankCategories, eq(transactions.categoryId, bankCategories.id))
     .leftJoin(spendingCategories, eq(transactions.spendingCategoryId, spendingCategories.id))
     .leftJoin(merchants, eq(transactions.merchantName, merchants.name))
@@ -133,20 +143,9 @@ export default async function TransactionsPage({
             <h1 className={css({ fontSize: "24px", fontWeight: "800", color: "var(--foreground)" })}>История</h1>
           </div>
           <a href="/transactions/new" className="sber-button" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", textDecoration: "none", width: "auto", minWidth: "180px" }}>
-            <PlusCircle size={20} /> Новая покупка
+            <PlusCircle size={20} /> Новая транзакция
           </a>
         </header>
-
-        <TransactionFilters 
-          bankOptions={bankOptions}
-          allCards={cardOptions}
-          initialFilters={{
-            startDate,
-            endDate,
-            bankIds,
-            cardIds
-          }}
-        />
 
         <TransactionsList initialHistory={history} splitsMap={splitsMap} />
       </div>

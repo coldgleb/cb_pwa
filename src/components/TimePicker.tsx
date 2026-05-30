@@ -109,13 +109,13 @@ export default function TimePicker({ name, defaultValue, value: controlledValue,
         className={flex({ 
           align: "center", 
           gap: "10px", 
-          px: "14px", 
-          py: "12px", 
-          bg: "var(--input-bg)", 
+          px: "18px", 
+          py: "16px", 
+          bg: isOpen ? "var(--card-bg)" : "var(--input-bg)", 
           border: "1px solid", 
           borderColor: isOpen ? "var(--sber-green)" : "transparent", 
-          borderRadius: "14px", 
-          transition: "all 0.2s"
+          borderRadius: "12px", 
+          transition: "border-color 0.2s, background 0.2s"
         })}
       >
         <div onClick={() => setIsOpen(!isOpen)} className={css({ cursor: "pointer", display: "flex", alignItems: "center" })}>
@@ -131,7 +131,7 @@ export default function TimePicker({ name, defaultValue, value: controlledValue,
             bg: "transparent", 
             border: "none", 
             outline: "none", 
-            fontSize: "14px", 
+            fontSize: "17px", 
             fontWeight: "600", 
             w: "full",
             color: "var(--foreground)",

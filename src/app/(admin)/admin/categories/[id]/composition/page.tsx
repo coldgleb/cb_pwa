@@ -1,5 +1,5 @@
 import { db } from "@/db";
-import { bankCategories, mccCodes, bankCategoryMcc, bankCards, banks, merchants, bankCategoryMerchant } from "@/db/schema";
+import { bankCategories, mccCodes, bankCategoryMcc, bankCards, banks, merchants, bankCategoryMerchant, loyaltyPrograms } from "@/db/schema";
 import { linkMccToCategory, unlinkMccFromCategory, linkMerchantToCategory, unlinkMerchantFromCategory, linkMultipleMccToCategory } from "@/lib/actions/mcc";
 import { css } from "../../../../../../../styled-system/css";
 import { stack, flex } from "../../../../../../../styled-system/patterns";
@@ -20,14 +20,14 @@ export default async function CategoryCompositionPage({ params }: { params: Prom
     .select({
       id: bankCategories.id,
       name: bankCategories.name,
-      bankCardId: bankCategories.bankCardId,
-      cardName: bankCards.name,
+      loyaltyProgramId: bankCategories.loyaltyProgramId,
+      programName: loyaltyPrograms.name,
       bankName: banks.name,
     })
     .from(bankCategories)
     .where(eq(bankCategories.id, categoryId))
-    .leftJoin(bankCards, eq(bankCategories.bankCardId, bankCards.id))
-    .leftJoin(banks, eq(bankCards.bankId, banks.id))
+    .leftJoin(loyaltyPrograms, eq(bankCategories.loyaltyProgramId, loyaltyPrograms.id))
+    .leftJoin(banks, eq(loyaltyPrograms.bankId, banks.id))
     .limit(1);
 
   if (!category) notFound();
@@ -84,7 +84,7 @@ export default async function CategoryCompositionPage({ params }: { params: Prom
     <div className={css({ minH: "100vh", bg: "var(--background)", pb: "40px" })}>
       <div className="sber-container-admin">
         <header className={flex({ align: "center", gap: "16px", mb: "32px" })}>
-          <a href={`/admin/bank-cards/${category.bankCardId}`} className="sber-icon-button" style={{ flexShrink: 0 }}>
+          <a href={`/admin/loyalty-programs/${category.loyaltyProgramId}`} className="sber-icon-button" style={{ flexShrink: 0 }}>
             <ArrowLeft size={20} />
           </a>
           <div className={stack({ gap: "4px" })}>
@@ -94,7 +94,7 @@ export default async function CategoryCompositionPage({ params }: { params: Prom
                 {category.name.toUpperCase()}
               </span>
               <p className={css({ fontSize: "13px", color: "var(--secondary-text)", fontWeight: "600" })}>
-                {category.bankName} • {category.cardName}
+                {category.bankName} • {category.programName}
               </p>
             </div>
           </div>

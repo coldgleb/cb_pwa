@@ -45,7 +45,8 @@ export async function bulkRecalculateTransactions(
       userId: userCards.userId,
       globalLimit: userCards.cashbackLimit,
       bankId: bankCards.bankId,
-      baseRounding: bankCards.roundingType
+      baseRounding: bankCards.roundingType,
+      loyaltyProgramId: bankCards.loyaltyProgramId,
     })
     .from(userCards)
     .innerJoin(bankCards, eq(userCards.bankCardId, bankCards.id))
@@ -53,6 +54,9 @@ export async function bulkRecalculateTransactions(
     .limit(1);
 
   if (!cardInfo) return;
+
+  const loyaltyProgramId = cardInfo.loyaltyProgramId;
+  if (!loyaltyProgramId) return;
 
   // 2. Fetch all required data for the card in bulk
   const [
@@ -64,12 +68,12 @@ export async function bulkRecalculateTransactions(
     allUserRules,
     allMerchants
   ] = await Promise.all([
-    db.select().from(bankCategories).where(eq(bankCategories.bankCardId, cardInfo.bankCardId)),
-    db.select().from(bankCategoryMcc).innerJoin(bankCategories, eq(bankCategoryMcc.categoryId, bankCategories.id)).where(eq(bankCategories.bankCardId, cardInfo.bankCardId)),
-    db.select().from(bankCategoryMerchant).innerJoin(bankCategories, eq(bankCategoryMerchant.categoryId, bankCategories.id)).where(eq(bankCategories.bankCardId, cardInfo.bankCardId)),
+    db.select().from(bankCategories).where(eq(bankCategories.loyaltyProgramId, loyaltyProgramId)),
+    db.select().from(bankCategoryMcc).innerJoin(bankCategories, eq(bankCategoryMcc.categoryId, bankCategories.id)).where(eq(bankCategories.loyaltyProgramId, loyaltyProgramId)),
+    db.select().from(bankCategoryMerchant).innerJoin(bankCategories, eq(bankCategoryMerchant.categoryId, bankCategories.id)).where(eq(bankCategories.loyaltyProgramId, loyaltyProgramId)),
     db.select().from(bankExclusions).where(eq(bankExclusions.bankCardId, cardInfo.bankCardId)),
     db.select().from(bankCardSettings).where(eq(bankCardSettings.bankCardId, cardInfo.bankCardId)).orderBy(desc(bankCardSettings.startDate)),
-    db.select().from(userCashbackRules).where(and(eq(userCashbackRules.userCardId, userCardId), lte(userCashbackRules.startDate, endDateStr), gte(userCashbackRules.endDate, startDateStr))),
+    db.select().from(userCashbackRules).where(and(eq(userCashbackRules.userId, cardInfo.userId), eq(userCashbackRules.loyaltyProgramId, loyaltyProgramId), lte(userCashbackRules.startDate, endDateStr), gte(userCashbackRules.endDate, startDateStr))),
     db.select().from(merchants)
   ]);
 
@@ -149,7 +153,7 @@ export async function bulkRecalculateTransactions(
     
     if (!isExcluded) {
       // B. Priority: Merchant Mapping
-      const merchantId = merchantsMap.get(tx.merchantName.toLowerCase().trim());
+      const merchantId = tx.merchantName ? merchantsMap.get(tx.merchantName.toLowerCase().trim()) : undefined;
       let mapping = null;
 
       if (merchantId) {
@@ -329,7 +333,7 @@ export async function bulkRecalculateTransactions(
 export async function calculateCashbackForTransaction(
   paidAmount: number,
   mccCode: string,
-  merchantName: string,
+  merchantName: string | null | undefined,
   userCardId: number,
   dateStr: string,
   excludeTxId?: number
@@ -343,7 +347,8 @@ export async function calculateCashbackForTransaction(
       userId: userCards.userId,
       globalLimit: userCards.cashbackLimit,
       bankId: bankCards.bankId,
-      baseRounding: bankCards.roundingType
+      baseRounding: bankCards.roundingType,
+      loyaltyProgramId: bankCards.loyaltyProgramId,
     })
     .from(userCards)
     .innerJoin(bankCards, eq(userCards.bankCardId, bankCards.id))
@@ -351,6 +356,11 @@ export async function calculateCashbackForTransaction(
     .limit(1);
 
   if (!cardInfo) return { cashback: 0, categoryId: null };
+
+  const loyaltyProgramId = cardInfo.loyaltyProgramId;
+  if (!loyaltyProgramId) {
+    return { cashback: 0, categoryId: null };
+  }
 
   const [historicalSetting] = await db
     .select({ roundingType: bankCardSettings.roundingType })
@@ -390,11 +400,15 @@ export async function calculateCashbackForTransaction(
   }
 
   // 2.5 Find merchant (case-insensitive)
-  const [merchant] = await db
-    .select({ id: merchants.id })
-    .from(merchants)
-    .where(sql`lower(${merchants.name}) = lower(${merchantName.trim()})`)
-    .limit(1);
+  let merchant = null;
+  if (merchantName) {
+    const [foundMerchant] = await db
+      .select({ id: merchants.id })
+      .from(merchants)
+      .where(sql`lower(${merchants.name}) = lower(${merchantName.trim()})`)
+      .limit(1);
+    merchant = foundMerchant;
+  }
   
   let finalMapping = null;
 
@@ -413,7 +427,7 @@ export async function calculateCashbackForTransaction(
       .where(
         and(
           eq(bankCategoryMerchant.merchantId, merchant.id),
-          eq(bankCategories.bankCardId, cardInfo.bankCardId),
+          eq(bankCategories.loyaltyProgramId, loyaltyProgramId),
           lte(bankCategoryMerchant.startDate, dateStr),
           or(isNull(bankCategoryMerchant.endDate), gte(bankCategoryMerchant.endDate, dateStr)),
           lte(bankCategories.startDate, dateStr),
@@ -444,7 +458,7 @@ export async function calculateCashbackForTransaction(
       .where(
         and(
           eq(bankCategoryMcc.mccCode, normalizedMcc),
-          eq(bankCategories.bankCardId, cardInfo.bankCardId),
+          eq(bankCategories.loyaltyProgramId, loyaltyProgramId),
           lte(bankCategoryMcc.startDate, dateStr),
           or(isNull(bankCategoryMcc.endDate), gte(bankCategoryMcc.endDate, dateStr)),
           lte(bankCategories.startDate, dateStr),
@@ -484,7 +498,7 @@ export async function calculateCashbackForTransaction(
       .from(bankCategories)
       .where(
         and(
-          eq(bankCategories.bankCardId, cardInfo.bankCardId), 
+          eq(bankCategories.loyaltyProgramId, loyaltyProgramId), 
           eq(bankCategories.name, "Остальные покупки"),
           lte(bankCategories.startDate, dateStr),
           or(isNull(bankCategories.endDate), gte(bankCategories.endDate, dateStr))
@@ -527,7 +541,8 @@ export async function calculateCashbackForTransaction(
       .from(userCashbackRules)
       .where(
         and(
-          eq(userCashbackRules.userCardId, userCardId),
+          eq(userCashbackRules.userId, cardInfo.userId),
+          eq(userCashbackRules.loyaltyProgramId, loyaltyProgramId),
           eq(userCashbackRules.bankCategoryId, categoryId),
           lte(userCashbackRules.startDate, dateStr),
           gte(userCashbackRules.endDate, dateStr)
@@ -568,7 +583,8 @@ export async function calculateCashbackForTransaction(
         .from(userCashbackRules)
         .where(
           and(
-            eq(userCashbackRules.userCardId, userCardId),
+            eq(userCashbackRules.userId, cardInfo.userId),
+            eq(userCashbackRules.loyaltyProgramId, loyaltyProgramId),
             eq(userCashbackRules.bankCategoryId, baseCat.id),
             lte(userCashbackRules.startDate, dateStr),
             gte(userCashbackRules.endDate, dateStr)

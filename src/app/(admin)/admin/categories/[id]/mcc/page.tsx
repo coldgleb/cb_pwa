@@ -1,5 +1,5 @@
 import { db } from "@/db";
-import { bankCategories, mccCodes, bankCategoryMcc, bankCards, banks, merchants, bankCategoryMerchant } from "@/db/schema";
+import { bankCategories, mccCodes, bankCategoryMcc, bankCards, banks, merchants, bankCategoryMerchant, loyaltyPrograms } from "@/db/schema";
 import { linkMccToCategory, unlinkMccFromCategory, linkMerchantToCategory, unlinkMerchantFromCategory, linkMultipleMccToCategory } from "@/lib/actions/mcc";
 import { css } from "../../../../../../../styled-system/css";
 import { stack, flex } from "../../../../../../../styled-system/patterns";
@@ -20,14 +20,14 @@ export default async function CategoryCompositionPage({ params }: { params: Prom
     .select({
       id: bankCategories.id,
       name: bankCategories.name,
-      bankCardId: bankCategories.bankCardId,
-      cardName: bankCards.name,
+      loyaltyProgramId: bankCategories.loyaltyProgramId,
+      programName: loyaltyPrograms.name,
       bankName: banks.name,
     })
     .from(bankCategories)
     .where(eq(bankCategories.id, categoryId))
-    .leftJoin(bankCards, eq(bankCategories.bankCardId, bankCards.id))
-    .leftJoin(banks, eq(bankCards.bankId, banks.id))
+    .leftJoin(loyaltyPrograms, eq(bankCategories.loyaltyProgramId, loyaltyPrograms.id))
+    .leftJoin(banks, eq(loyaltyPrograms.bankId, banks.id))
     .limit(1);
 
   if (!category) notFound();
@@ -83,12 +83,12 @@ export default async function CategoryCompositionPage({ params }: { params: Prom
   return (
     <div className={stack({ gap: "32px" })}>
       <header className={flex({ align: "center", gap: "16px", mb: "8px" })}>
-        <a href={`/admin/bank-cards/${category.bankCardId}`} className="sber-icon-button">
+        <a href={`/admin/loyalty-programs/${category.loyaltyProgramId}`} className="sber-icon-button">
           <ArrowLeft size={20} />
         </a>
         <div className={stack({ gap: "4px" })}>
           <h1 className={css({ fontSize: "24px", fontWeight: "800", color: "var(--foreground)" })}>Состав "{category.name}"</h1>
-          <p className={css({ fontSize: "14px", color: "var(--secondary-text)", fontWeight: "600" })}>{category.bankName} • {category.cardName}</p>
+          <p className={css({ fontSize: "14px", color: "var(--secondary-text)", fontWeight: "600" })}>{category.bankName} • {category.programName}</p>
         </div>
       </header>
 

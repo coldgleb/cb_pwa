@@ -1,10 +1,9 @@
 "use server";
 
 import { db } from "@/db";
-import { userCashbackRules, bankCategories, userCards } from "@/db/schema";
+import { userCashbackRules, bankCategories, userCards, bankCards } from "@/db/schema";
 import { auth } from "@/auth";
 import { revalidatePath } from "next/cache";
-
 import { and, eq, lte, gte, inArray } from "drizzle-orm";
 import { recalculateTransactionsForUserCard, bulkRecalculateTransactions } from "./cashback-engine";
 
@@ -12,10 +11,10 @@ export async function saveMonthlyRules(formData: FormData) {
   const session = await auth();
   if (!session?.user?.id) throw new Error("Unauthorized");
 
-  const userCardId = parseInt(formData.get("userCardId") as string);
+  const loyaltyProgramId = parseInt(formData.get("loyaltyProgramId") as string);
   const yearMonth = formData.get("month") as string; // Format: "YYYY-MM"
   
-  if (isNaN(userCardId) || !yearMonth) throw new Error("Invalid data");
+  if (isNaN(loyaltyProgramId) || !yearMonth) throw new Error("Invalid data");
 
   const startDate = `${yearMonth}-01`;
   const [year, month] = yearMonth.split("-").map(Number);
@@ -28,7 +27,8 @@ export async function saveMonthlyRules(formData: FormData) {
     .from(userCashbackRules)
     .where(
         and(
-            eq(userCashbackRules.userCardId, userCardId),
+            eq(userCashbackRules.userId, session.user.id),
+            eq(userCashbackRules.loyaltyProgramId, loyaltyProgramId),
             eq(userCashbackRules.startDate, startDate),
             eq(userCashbackRules.endDate, endDate)
         )
@@ -62,7 +62,8 @@ export async function saveMonthlyRules(formData: FormData) {
     const isNoCashback = cat?.name === "Без кешбэка";
     
     return {
-      userCardId,
+      userId: session.user.id!,
+      loyaltyProgramId,
       bankCategoryId: r.id,
       percentage: isNoCashback ? 0 : r.percentage,
       tiers: isNoCashback ? "[]" : (cat?.tiers || "[]"),
@@ -93,7 +94,8 @@ export async function saveMonthlyRules(formData: FormData) {
   await db.delete(userCashbackRules)
     .where(
       and(
-        eq(userCashbackRules.userCardId, userCardId),
+        eq(userCashbackRules.userId, session.user.id),
+        eq(userCashbackRules.loyaltyProgramId, loyaltyProgramId),
         eq(userCashbackRules.startDate, startDate),
         eq(userCashbackRules.endDate, endDate)
       )
@@ -101,25 +103,36 @@ export async function saveMonthlyRules(formData: FormData) {
 
   await db.insert(userCashbackRules).values(rulesToSave);
 
-  // 4. Perform optimized recalculation
-  if (affectedCategoryIds.length > 0) {
-    // Check if card has a global limit. If yes, we must recalculate everything in the month 
-    // because changing one category might affect the limit for others.
-    const [card] = await db.select({ limit: userCards.cashbackLimit }).from(userCards).where(eq(userCards.id, userCardId)).limit(1);
+  // 4. Find all user cards of this user that belong to this loyalty program
+  const cards = await db
+    .select({ id: userCards.id })
+    .from(userCards)
+    .innerJoin(bankCards, eq(userCards.bankCardId, bankCards.id))
+    .where(
+      and(
+        eq(userCards.userId, session.user.id),
+        eq(bankCards.loyaltyProgramId, loyaltyProgramId)
+      )
+    );
+
+  // 5. Perform optimized recalculation for each card
+  for (const card of cards) {
+    const [userCard] = await db.select({ limit: userCards.cashbackLimit }).from(userCards).where(eq(userCards.id, card.id)).limit(1);
     
-    if (card?.limit !== null) {
+    if (userCard?.limit !== null) {
         // Recalculate ALL for this month (using the super-fast bulk engine)
-        await bulkRecalculateTransactions(userCardId, startDate, endDate);
-    } else {
+        await bulkRecalculateTransactions(card.id, startDate, endDate);
+    } else if (affectedCategoryIds.length > 0) {
         // Recalculate ONLY affected categories (using the super-fast bulk engine)
-        await bulkRecalculateTransactions(userCardId, startDate, endDate, affectedCategoryIds);
+        await bulkRecalculateTransactions(card.id, startDate, endDate, affectedCategoryIds);
     }
   }
 
-  revalidatePath(`/cards/${userCardId}`);
+  revalidatePath("/cards");
+  revalidatePath(`/cards/loyalty-programs/${loyaltyProgramId}`);
 }
 
-export async function copyRulesFromPreviousMonth(userCardId: number, targetMonth: string) {
+export async function copyRulesFromPreviousMonth(loyaltyProgramId: number, targetMonth: string) {
   const session = await auth();
   if (!session?.user?.id) throw new Error("Unauthorized");
 
@@ -145,7 +158,8 @@ export async function copyRulesFromPreviousMonth(userCardId: number, targetMonth
     .leftJoin(bankCategories, eq(userCashbackRules.bankCategoryId, bankCategories.id))
     .where(
       and(
-        eq(userCashbackRules.userCardId, userCardId),
+        eq(userCashbackRules.userId, session.user.id),
+        eq(userCashbackRules.loyaltyProgramId, loyaltyProgramId),
         eq(userCashbackRules.startDate, prevStartDate),
         eq(userCashbackRules.endDate, prevEndDate)
       )
@@ -161,7 +175,8 @@ export async function copyRulesFromPreviousMonth(userCardId: number, targetMonth
   await db.delete(userCashbackRules)
     .where(
       and(
-        eq(userCashbackRules.userCardId, userCardId),
+        eq(userCashbackRules.userId, session.user.id),
+        eq(userCashbackRules.loyaltyProgramId, loyaltyProgramId),
         eq(userCashbackRules.startDate, targetStartDate),
         eq(userCashbackRules.endDate, targetEndDate)
       )
@@ -170,7 +185,8 @@ export async function copyRulesFromPreviousMonth(userCardId: number, targetMonth
   // Insert copied rules
   await db.insert(userCashbackRules).values(
     prevRules.map(r => ({
-      userCardId,
+      userId: session.user.id!,
+      loyaltyProgramId,
       bankCategoryId: r.bankCategoryId as number,
       percentage: r.categoryName === "Без кешбэка" ? 0 : r.percentage,
       tiers: r.categoryName === "Без кешбэка" ? "[]" : r.tiers,
@@ -180,6 +196,22 @@ export async function copyRulesFromPreviousMonth(userCardId: number, targetMonth
     }))
   );
 
-  await recalculateTransactionsForUserCard(userCardId, targetStartDate, targetEndDate);
-  revalidatePath(`/cards/${userCardId}`);
+  // Find all user cards of this user that belong to this loyalty program
+  const cards = await db
+    .select({ id: userCards.id })
+    .from(userCards)
+    .innerJoin(bankCards, eq(userCards.bankCardId, bankCards.id))
+    .where(
+      and(
+        eq(userCards.userId, session.user.id),
+        eq(bankCards.loyaltyProgramId, loyaltyProgramId)
+      )
+    );
+
+  for (const card of cards) {
+    await recalculateTransactionsForUserCard(card.id, targetStartDate, targetEndDate);
+  }
+  
+  revalidatePath("/cards");
+  revalidatePath(`/cards/loyalty-programs/${loyaltyProgramId}`);
 }

@@ -1,18 +1,29 @@
 "use server";
 
 import { db } from "@/db";
-import { bankCategories, bankCategoryMcc, mccCodes, bankCategoryMerchant } from "@/db/schema";
+import { bankCategories, bankCategoryMcc, mccCodes, bankCategoryMerchant, bankCards, transactions, bankExclusions } from "@/db/schema";
 import { auth } from "@/auth";
 import { revalidatePath } from "next/cache";
+import { eq, isNull, and, inArray } from "drizzle-orm";
 
 import { recalculateTransactionsForBankCard } from "./transactions";
+
+async function recalculateTransactionsForLoyaltyProgram(loyaltyProgramId: number) {
+  const cards = await db
+    .select({ id: bankCards.id })
+    .from(bankCards)
+    .where(eq(bankCards.loyaltyProgramId, loyaltyProgramId));
+  for (const card of cards) {
+    await recalculateTransactionsForBankCard(card.id);
+  }
+}
 
 export async function createBankCategory(formData: FormData) {
   const session = await auth();
   if (session?.user?.role !== "admin") throw new Error("Unauthorized");
 
   const name = formData.get("name") as string;
-  const bankCardId = parseInt(formData.get("bankCardId") as string);
+  const loyaltyProgramId = parseInt(formData.get("loyaltyProgramId") as string);
   const defaultPercentage = parseFloat(formData.get("defaultPercentage") as string);
   const roundingType = formData.get("roundingType") as string || "inherit";
   const mccText = formData.get("mccText") as string || "";
@@ -22,7 +33,7 @@ export async function createBankCategory(formData: FormData) {
   const endDate = formData.get("endDate") as string || null;
   const cashbackLimit = parseFloat(formData.get("cashbackLimit") as string) || null;
 
-  if (!name || isNaN(bankCardId) || isNaN(defaultPercentage)) {
+  if (!name || isNaN(loyaltyProgramId) || isNaN(defaultPercentage)) {
     throw new Error("Invalid data");
   }
 
@@ -48,7 +59,7 @@ export async function createBankCategory(formData: FormData) {
 
   // Parse MCC codes using regex (any 4-digit number)
   const codes = [...new Set(mccText.match(/\b\d{4}\b/g) || [])];
-  if (name === "Без кешбэка" && !codes.includes("0000")) {
+  if (name && name.toLowerCase().includes("без кешбэка") && !codes.includes("0000")) {
     codes.push("0000");
   }
 
@@ -56,7 +67,7 @@ export async function createBankCategory(formData: FormData) {
   let finalPercentage = defaultPercentage;
   let finalLimit = cashbackLimit;
   
-  if (name === "Без кешбэка") {
+  if (name && name.toLowerCase().includes("без кешбэка")) {
     finalPercentage = 0;
     finalTiers = "[]";
     finalLimit = null;
@@ -64,7 +75,7 @@ export async function createBankCategory(formData: FormData) {
 
   const [newCategory] = await db.insert(bankCategories).values({
     name,
-    bankCardId,
+    loyaltyProgramId,
     defaultPercentage: finalPercentage,
     roundingType,
     tiers: finalTiers,
@@ -101,8 +112,8 @@ export async function createBankCategory(formData: FormData) {
     }
   }
 
-  await recalculateTransactionsForBankCard(bankCardId);
-  revalidatePath(`/admin/bank-cards/${bankCardId}`);
+  await recalculateTransactionsForLoyaltyProgram(loyaltyProgramId);
+  revalidatePath(`/admin/loyalty-programs/${loyaltyProgramId}`);
 }
 
 export async function updateBankCategory(id: number, formData: FormData) {
@@ -115,13 +126,13 @@ export async function updateBankCategory(id: number, formData: FormData) {
   const name = formData.get("name") as string;
   const defaultPercentage = parseFloat(formData.get("defaultPercentage") as string);
   const roundingType = formData.get("roundingType") as string;
-  const bankCardId = parseInt(formData.get("bankCardId") as string);
+  const loyaltyProgramId = parseInt(formData.get("loyaltyProgramId") as string);
   const tiersRaw = formData.get("tiers") as string || "[]";
   const startDate = formData.get("startDate") as string;
   const endDate = formData.get("endDate") as string || null;
   const cashbackLimit = parseFloat(formData.get("cashbackLimit") as string) || null;
 
-  if (isNaN(defaultPercentage)) throw new Error("Invalid data");
+  if (isNaN(defaultPercentage) || isNaN(loyaltyProgramId)) throw new Error("Invalid data");
 
   let tiers = "[]";
   try {
@@ -137,7 +148,7 @@ export async function updateBankCategory(id: number, formData: FormData) {
   let finalTiers = tiers;
   let finalLimit = cashbackLimit;
 
-  if (category.name === "Без кешбэка" || name === "Без кешбэка") {
+  if (category.name.toLowerCase().includes("без кешбэка") || (name && name.toLowerCase().includes("без кешбэка"))) {
     finalPercentage = 0;
     finalTiers = "[]";
     finalLimit = null;
@@ -168,7 +179,7 @@ export async function updateBankCategory(id: number, formData: FormData) {
   if (formData.has("mccText")) {
     const mccText = formData.get("mccText") as string;
     const newCodes = new Set(mccText.match(/\b\d{4}\b/g) || []);
-    if ((category.name === "Без кешбэка" || name === "Без кешбэка") && !newCodes.has("0000")) {
+    if ((category.name.toLowerCase().includes("без кешбэка") || (name && name.toLowerCase().includes("без кешбэка"))) && !newCodes.has("0000")) {
       newCodes.add("0000");
     }
     
@@ -213,8 +224,8 @@ export async function updateBankCategory(id: number, formData: FormData) {
     }
   }
 
-  await recalculateTransactionsForBankCard(bankCardId);
-  revalidatePath(`/admin/bank-cards/${bankCardId}`);
+  await recalculateTransactionsForLoyaltyProgram(loyaltyProgramId);
+  revalidatePath(`/admin/loyalty-programs/${loyaltyProgramId}`);
 }
 
 export async function duplicateBankCategory(id: number) {
@@ -228,7 +239,7 @@ export async function duplicateBankCategory(id: number) {
 
   // 1. Create new category
   const [newCategory] = await db.insert(bankCategories).values({
-    bankCardId: category.bankCardId,
+    loyaltyProgramId: category.loyaltyProgramId,
     name: `${category.name} (Копия)`,
     defaultPercentage: category.defaultPercentage,
     tiers: category.tiers,
@@ -282,15 +293,15 @@ export async function duplicateBankCategory(id: number) {
     );
   }
 
-  await recalculateTransactionsForBankCard(category.bankCardId);
-  revalidatePath(`/admin/bank-cards/${category.bankCardId}`);
+  await recalculateTransactionsForLoyaltyProgram(category.loyaltyProgramId);
+  revalidatePath(`/admin/loyalty-programs/${category.loyaltyProgramId}`);
 }
 
 export async function deleteBankCategory(id: number) {
   const session = await auth();
   if (session?.user?.role !== "admin") throw new Error("Unauthorized");
 
-  const [category] = await db.select({ bankCardId: bankCategories.bankCardId }).from(bankCategories).where(eq(bankCategories.id, id)).limit(1);
+  const [category] = await db.select({ loyaltyProgramId: bankCategories.loyaltyProgramId }).from(bankCategories).where(eq(bankCategories.id, id)).limit(1);
   if (!category) throw new Error("Category not found");
 
   // 1. Delete associated MCC links
@@ -307,12 +318,10 @@ export async function deleteBankCategory(id: number) {
   // 4. Delete the category itself
   await db.delete(bankCategories).where(eq(bankCategories.id, id));
 
-  await recalculateTransactionsForBankCard(category.bankCardId);
-  revalidatePath(`/admin/bank-cards/${category.bankCardId}`);
+  await recalculateTransactionsForLoyaltyProgram(category.loyaltyProgramId);
+  revalidatePath(`/admin/loyalty-programs/${category.loyaltyProgramId}`);
 }
 
-import { eq, isNull, and, inArray } from "drizzle-orm";
-import { transactions, bankExclusions, bankCards } from "@/db/schema";
 
 export async function addBankCardExclusion(bankCardId: number, mccCode: string) {
   const session = await auth();

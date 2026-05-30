@@ -53,6 +53,7 @@ export default async function StatisticsPage({
   
   const conditionsRaw = [
     eq(transactions.userId, userId),
+    eq(transactions.type, "expense"),
     sql`(${transactions.transactionDate} / (CASE WHEN ${transactions.transactionDate} > 2000000000 THEN 1000 ELSE 1 END)) >= ${startUnix}`,
     sql`(${transactions.transactionDate} / (CASE WHEN ${transactions.transactionDate} > 2000000000 THEN 1000 ELSE 1 END)) <= ${endUnix}`
   ];
@@ -442,11 +443,12 @@ export default async function StatisticsPage({
                 <p className={css({ py: "20px", textAlign: "center", color: "var(--secondary-text)", fontSize: "14px" })}>Нет операций</p>
               ) : (
                 merchantStats.map((merch, i) => {
-                  const icon = getIconUrl({ logo: merch.logo, website: merch.website, name: merch.name });
+                  const nameStr = merch.name || "";
+                  const icon = getIconUrl({ logo: merch.logo, website: merch.website, name: nameStr });
                   return (
                     <a 
                       key={i} 
-                      href={`/transactions?merchantName=${encodeURIComponent(merch.name)}`}
+                      href={`/transactions?merchantName=${encodeURIComponent(nameStr)}`}
                       className={flex({ 
                         align: "center", 
                         justify: "space-between", 

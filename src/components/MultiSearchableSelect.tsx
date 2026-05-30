@@ -101,14 +101,14 @@ export default function MultiSearchableSelect({
         className={flex({ 
           align: "center", 
           gap: "10px", 
-          px: "14px", 
-          py: "12px", 
-          bg: "var(--input-bg)", 
+          px: "18px", 
+          py: "16px", 
+          bg: isOpen ? "var(--card-bg)" : "var(--input-bg)", 
           border: "1px solid", 
-          borderColor: isOpen ? "var(--sber-green)" : "var(--border-color)", 
-          borderRadius: "14px", 
+          borderColor: isOpen ? "var(--sber-green)" : "transparent", 
+          borderRadius: "12px", 
           cursor: "pointer",
-          transition: "all 0.2s",
+          transition: "border-color 0.2s, background 0.2s",
           WebkitTapHighlightColor: "transparent",
           _active: { bg: "var(--surface-secondary)" },
           w: "full"
@@ -116,7 +116,7 @@ export default function MultiSearchableSelect({
       >
         <div className={css({ flex: 1, overflow: "hidden", minW: 0 })}>
           <p className={css({ 
-            fontSize: "14px", 
+            fontSize: "17px", 
             fontWeight: selectedValues.size > 0 ? "600" : "400", 
             color: selectedValues.size > 0 ? "var(--foreground)" : "var(--secondary-text)", 
             whiteSpace: "nowrap", 
@@ -137,7 +137,9 @@ export default function MultiSearchableSelect({
           top: { base: "auto", md: "calc(100% + 4px)" },
           left: 0, 
           right: { base: 0, md: "auto" }, 
-          minW: { md: "320px" },
+          w: { base: "full", md: "max-content" },
+          minW: "100%",
+          maxW: { md: "450px" },
           bg: "var(--card-bg)", 
           borderRadius: { base: "24px 24px 0 0", md: "18px" },
           shadow: "0 -10px 25px rgba(0, 0, 0, 0.2), 0 10px 25px -5px rgba(0, 0, 0, 0.2)", 

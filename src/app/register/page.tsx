@@ -19,6 +19,12 @@ export default function RegisterPage() {
           </p>
         </div>
 
+        <div className={css({ mt: "-12px", p: "12px", bg: "rgba(33, 160, 56, 0.05)", border: "1px solid rgba(33, 160, 56, 0.2)", borderRadius: "12px", mb: "20px" })}>
+          <p className={css({ fontSize: "12px", color: "var(--sber-green)", textAlign: "center", fontWeight: "600" })}>
+            🔐 Это приватное приложение. Регистрация доступна только для владельца.
+          </p>
+        </div>
+
         <section className="sber-card">
           <form action={registerUser} className={stack({ gap: "20px" })}>
             <div className={stack({ gap: "8px" })}>

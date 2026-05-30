@@ -27,12 +27,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
 
-        console.log(`[AUTH] Attempting login for: ${credentials.email}`);
+        const emailStr = (credentials.email as string).toLowerCase().trim();
+        if (emailStr !== "saygingleb101@gmail.com") {
+          console.log(`[AUTH] Access denied. Personal app only allows saygingleb101@gmail.com. Attempted: ${credentials.email}`);
+          return null;
+        }
+
+        console.log(`[AUTH] Attempting login for: ${emailStr}`);
 
         const [user] = await db
           .select()
           .from(users)
-          .where(eq(users.email, credentials.email as string))
+          .where(eq(users.email, emailStr))
           .limit(1);
 
         if (!user) {
@@ -77,12 +83,27 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return token;
     },
     async session({ session, token }) {
-      if (session.user) {
-        session.user.id = token.id as string;
+      if (session.user && token.id) {
+        const userId = token.id as string;
+        
+        // Verify user exists in the DB (handles database resets)
+        const [dbUser] = await db
+          .select({ id: users.id })
+          .from(users)
+          .where(eq(users.id, userId))
+          .limit(1);
+
+        if (!dbUser) {
+          // If user does not exist in DB, invalidate the session completely
+          return null as any;
+        }
+
+        session.user.id = userId;
         session.user.role = token.role as string;
         session.user.email = token.email as string;
       }
       return session;
     },
+
   },
 });

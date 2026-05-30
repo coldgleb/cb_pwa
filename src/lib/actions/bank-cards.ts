@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/db";
-import { bankCards, bankCardSettings, bankCategories } from "@/db/schema";
+import { bankCards, bankCardSettings, bankCategories, userCards } from "@/db/schema";
 import { auth } from "@/auth";
 import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
@@ -10,7 +10,6 @@ import { recalculateTransactionsForBankCard } from "./transactions";
 export { recalculateTransactionsForBankCard };
 
 export async function createBankCard(formData: FormData) {
-
   const session = await auth();
   if (session?.user?.role !== "admin") throw new Error("Unauthorized");
 
@@ -18,32 +17,20 @@ export async function createBankCard(formData: FormData) {
   const bankId = parseInt(formData.get("bankId") as string);
   const roundingType = formData.get("roundingType") as string || "no_rounding";
   const defaultCashbackLimit = parseFloat(formData.get("defaultCashbackLimit") as string) || null;
+  const loyaltyProgramIdVal = formData.get("loyaltyProgramId") as string;
+  const loyaltyProgramId = loyaltyProgramIdVal ? parseInt(loyaltyProgramIdVal) : null;
+  const accountType = formData.get("accountType") as string || "debit";
 
   if (!name || isNaN(bankId)) throw new Error("Invalid data");
 
-  const [newCard] = await db.insert(bankCards).values({
+  await db.insert(bankCards).values({
     name,
     bankId,
     roundingType,
     defaultCashbackLimit,
-  }).returning();
-
-  if (newCard) {
-    await db.insert(bankCategories).values([
-      {
-        bankCardId: newCard.id,
-        name: "Остальные покупки",
-        defaultPercentage: 0,
-        roundingType: "inherit",
-      },
-      {
-        bankCardId: newCard.id,
-        name: "Без кешбэка",
-        defaultPercentage: 0,
-        roundingType: "inherit",
-      }
-    ]);
-  }
+    loyaltyProgramId: loyaltyProgramId && !isNaN(loyaltyProgramId) ? loyaltyProgramId : null,
+    accountType,
+  });
 
   revalidatePath("/admin/bank-cards");
 }
@@ -56,12 +43,27 @@ export async function updateBankCard(id: number, formData: FormData) {
   const bankId = parseInt(formData.get("bankId") as string);
   const roundingType = formData.get("roundingType") as string || "no_rounding";
   const defaultCashbackLimit = parseFloat(formData.get("defaultCashbackLimit") as string) || null;
+  const loyaltyProgramIdVal = formData.get("loyaltyProgramId") as string;
+  const loyaltyProgramId = loyaltyProgramIdVal ? parseInt(loyaltyProgramIdVal) : null;
+  const accountType = formData.get("accountType") as string || "debit";
 
   if (!name || isNaN(bankId)) throw new Error("Invalid data");
 
   await db.update(bankCards)
-    .set({ name, bankId, roundingType, defaultCashbackLimit })
+    .set({ 
+      name, 
+      bankId, 
+      roundingType, 
+      defaultCashbackLimit, 
+      loyaltyProgramId: loyaltyProgramId && !isNaN(loyaltyProgramId) ? loyaltyProgramId : null,
+      accountType,
+    })
     .where(eq(bankCards.id, id));
+
+  // Sync accountType to all user cards of this type
+  await db.update(userCards)
+    .set({ accountType })
+    .where(eq(userCards.bankCardId, id));
 
   // Trigger recalculation for all users using this card type
   await recalculateTransactionsForBankCard(id);
@@ -86,10 +88,6 @@ export async function deleteBankCard(id: number) {
   const session = await auth();
   if (session?.user?.role !== "admin") throw new Error("Unauthorized");
 
-  // Related categories, settings, etc. should ideally be deleted or handled.
-  // Assuming cascade is not fully set up in SQLite via Drizzle automatically without explicit schema support.
-  
-  await db.delete(bankCategories).where(eq(bankCategories.bankCardId, id));
   await db.delete(bankCardSettings).where(eq(bankCardSettings.bankCardId, id));
   await db.delete(bankCards).where(eq(bankCards.id, id));
 

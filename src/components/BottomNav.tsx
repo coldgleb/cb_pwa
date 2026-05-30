@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { Home, CreditCard, PlusCircle, History, BarChart2, Shield, Search } from "lucide-react";
+import { Home, CreditCard, PlusCircle, History, BarChart2, Sliders, Search } from "lucide-react";
 import { css } from "../../styled-system/css";
 import { flex, stack } from "../../styled-system/patterns";
 
@@ -33,7 +33,7 @@ export default function BottomNav({ isAdmin = false }: BottomNavProps) {
   ];
 
   if (isAdmin) {
-    navItems.push({ label: "Админ", href: "/admin/banks", icon: Shield });
+    navItems.push({ label: "Управление", href: "/admin/banks", icon: Sliders });
   }
 
   return (

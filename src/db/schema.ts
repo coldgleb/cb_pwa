@@ -65,6 +65,13 @@ export const banks = sqliteTable("banks", {
   website: text("website"),
 });
 
+export const loyaltyPrograms = sqliteTable("loyalty_programs", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  bankId: integer("bank_id").references(() => banks.id).notNull(),
+  name: text("name").notNull(),
+  description: text("description"),
+});
+
 export const bankCards = sqliteTable("bank_cards", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   bankId: integer("bank_id").references(() => banks.id).notNull(),
@@ -72,6 +79,8 @@ export const bankCards = sqliteTable("bank_cards", {
   roundingType: text("rounding_type").default("no_rounding").notNull(),
   defaultCashbackLimit: real("default_cashback_limit"),
   isArchived: integer("is_archived", { mode: "boolean" }).default(false),
+  loyaltyProgramId: integer("loyalty_program_id").references(() => loyaltyPrograms.id),
+  accountType: text("account_type").default("debit").notNull(),
 });
 
 // New table for historical settings
@@ -88,6 +97,9 @@ export const userCards = sqliteTable("user_cards", {
   bankCardId: integer("bank_card_id").references(() => bankCards.id).notNull(),
   lastFourDigits: text("last_four_digits"),
   cashbackLimit: real("cashback_limit"),
+  initialBalance: real("initial_balance").default(0).notNull(),
+  accountType: text("account_type").default("debit").notNull(),
+  creditLimit: real("credit_limit"),
 });
 
 export const mccCodes = sqliteTable("mcc_codes", {
@@ -98,7 +110,7 @@ export const mccCodes = sqliteTable("mcc_codes", {
 
 export const bankCategories = sqliteTable("bank_categories", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  bankCardId: integer("bank_card_id").references(() => bankCards.id).notNull(),
+  loyaltyProgramId: integer("loyalty_program_id").references(() => loyaltyPrograms.id).notNull(),
   name: text("name").notNull(),
   defaultPercentage: real("default_percentage").default(0).notNull(),
   tiers: text("tiers").default("[]").notNull(),
@@ -150,7 +162,8 @@ export const bankExclusions = sqliteTable("bank_exclusions", {
 
 export const userCashbackRules = sqliteTable("user_cashback_rules", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  userCardId: integer("user_card_id").references(() => userCards.id).notNull(),
+  userId: text("user_id").references(() => users.id).notNull(),
+  loyaltyProgramId: integer("loyalty_program_id").references(() => loyaltyPrograms.id).notNull(),
   bankCategoryId: integer("bank_category_id").references(() => bankCategories.id),
   merchantId: integer("merchant_id").references(() => merchants.id),
   percentage: real("percentage").notNull(),
@@ -160,14 +173,17 @@ export const userCashbackRules = sqliteTable("user_cashback_rules", {
   cashbackLimit: real("cashback_limit"),
 });
 
+
 export const transactions = sqliteTable("transactions", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   userId: text("user_id").references(() => users.id).notNull(),
   userCardId: integer("user_card_id").references(() => userCards.id).notNull(),
+  toUserCardId: integer("to_user_card_id").references(() => userCards.id),
+  type: text("type").default("expense").notNull(), // 'expense', 'income', 'transfer'
   amount: real("amount").notNull(),
   paidAmount: real("paid_amount"),
   transactionDate: integer("transaction_date", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
-  merchantName: text("merchant_name").notNull(),
+  merchantName: text("merchant_name"),
   mccCode: text("mcc_code"),
   calculatedCashback: real("calculated_cashback"),
   cashbackPercentage: real("cashback_percentage"),

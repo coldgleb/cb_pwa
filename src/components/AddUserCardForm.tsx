@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useMemo, useTransition } from "react";
+import { css } from "../../styled-system/css";
 import { stack } from "../../styled-system/patterns";
+
 import SearchableSelect from "./SearchableSelect";
 import { addUserCard } from "@/lib/actions/user-cards";
 import { useToast } from "./Toast";
@@ -16,6 +18,7 @@ interface CardType {
   id: number;
   bankId: number;
   name: string;
+  accountType: string;
 }
 
 interface AddUserCardFormProps {
@@ -47,6 +50,13 @@ export default function AddUserCardForm({ banks, cardTypes }: AddUserCardFormPro
     setSelectedCardId(""); // Reset card selection when bank changes
   };
 
+  const selectedCardType = useMemo(() => 
+    cardTypes.find(ct => ct.id === parseInt(selectedCardId)),
+    [cardTypes, selectedCardId]
+  );
+
+  const isCredit = selectedCardType?.accountType === "credit";
+
   async function action(formData: FormData) {
     startTransition(async () => {
       try {
@@ -61,6 +71,8 @@ export default function AddUserCardForm({ banks, cardTypes }: AddUserCardFormPro
 
   return (
     <form action={action} className={stack({ gap: "20px" })}>
+      <input type="hidden" name="accountType" value={selectedCardType?.accountType || "debit"} />
+
       <div className={stack({ gap: "6px" })}>
         <label className="sber-label">БАНК-ЭМИТЕНТ</label>
         <SearchableSelect 
@@ -86,6 +98,20 @@ export default function AddUserCardForm({ banks, cardTypes }: AddUserCardFormPro
         />
       </div>
 
+      {isCredit && (
+        <div className={stack({ gap: "6px" })}>
+          <label className="sber-label">КРЕДИТНЫЙ ЛИМИТ (₽)</label>
+          <input 
+            name="creditLimit" 
+            type="number" 
+            step="0.01" 
+            placeholder="50000.00" 
+            className="sber-input" 
+            style={{ fontWeight: "700" }}
+          />
+        </div>
+      )}
+
       <div className={stack({ gap: "6px" })}>
         <label className="sber-label">ПОСЛЕДНИЕ 4 ЦИФРЫ</label>
         <input 
@@ -96,6 +122,24 @@ export default function AddUserCardForm({ banks, cardTypes }: AddUserCardFormPro
           className="sber-input" 
         />
       </div>
+
+      <div className={stack({ gap: "6px" })}>
+        <label className="sber-label">НАЧАЛЬНЫЙ БАЛАНС (₽)</label>
+        <input 
+          name="initialBalance" 
+          type="number" 
+          step="0.01" 
+          placeholder={isCredit ? "-5000.00" : "0.00"} 
+          className="sber-input" 
+          style={{ fontWeight: "700" }}
+        />
+        {isCredit && (
+          <span className={css({ fontSize: "11px", color: "var(--secondary-text)", fontWeight: "500" })}>
+            Укажите отрицательный баланс, если по карте есть задолженность (например, -15000)
+          </span>
+        )}
+      </div>
+
 
       <button 
         type="submit" 
@@ -108,4 +152,3 @@ export default function AddUserCardForm({ banks, cardTypes }: AddUserCardFormPro
     </form>
   );
 }
-

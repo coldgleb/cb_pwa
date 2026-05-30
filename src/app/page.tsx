@@ -1,79 +1,120 @@
 import { db } from "@/db";
-import { userCards, userCashbackRules, transactions, banks, bankCards, users } from "@/db/schema";
+import { userCards, transactions, banks, bankCards, users } from "@/db/schema";
 import { auth, signOut } from "@/auth";
 import { loginUser } from "@/lib/actions/auth";
 import { css } from "../../styled-system/css";
-import { stack, flex, grid } from "../../styled-system/patterns";
-import { eq, sql, and, gte } from "drizzle-orm";
-import { Wallet, LogOut, ShieldCheck, Percent } from "lucide-react";
+import { stack, flex } from "../../styled-system/patterns";
+import { eq, sql, and } from "drizzle-orm";
+import { LogOut, ShieldCheck, ChevronRight, Landmark } from "lucide-react";
+import { getIconUrl } from "@/lib/utils/icons";
+import ThemeIconButton from "@/components/ThemeIconButton";
+
+const getAccountTypeLabel = (type: string) => {
+  switch (type) {
+    case "credit": return "Кредитная карта";
+    case "cardless": return "Счет без карты";
+    case "investments": return "Инвестиции";
+    case "bonus": return "Бонусный счет";
+    default: return "Дебетовая карта";
+  }
+};
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
   const session = await auth();
   
-  let spentThisMonth = 0;
-  let cashbackThisMonth = 0;
-  let avgPercentage = 0;
-  let bankStats: { bankName: string; bankLogo: string | null; spent: number; cashback: number; percentage: number }[] = [];
+  let userCardsWithBalances: {
+    id: number;
+    lastFour: string | null;
+    cardName: string;
+    bankName: string;
+    bankLogo: string | null;
+    bankWebsite: string | null;
+    balance: number;
+    accountType: string;
+    creditLimit: number | null;
+  }[] = [];
 
   if (session?.user?.id) {
     try {
-      const now = new Date();
-      const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-      
-      const stats = await db
-        .select({ 
-          totalSpent: sql<number>`sum(${transactions.amount})`,
-          totalCalculated: sql<number>`sum(${transactions.calculatedCashback})`,
-          totalManual: sql<number>`sum(${transactions.manualCashbackAdjustment})`
-        })
-        .from(transactions)
-        .where(
-          and(
-            eq(transactions.userId, session.user.id),
-            gte(transactions.transactionDate, firstDayOfMonth)
-          )
-        );
-      
-      spentThisMonth = Number(stats[0]?.totalSpent) || 0;
-      const calculated = Number(stats[0]?.totalCalculated) || 0;
-      const manual = Number(stats[0]?.totalManual) || 0;
-      cashbackThisMonth = calculated + manual;
-      avgPercentage = spentThisMonth > 0 ? (cashbackThisMonth / spentThisMonth) * 100 : 0;
-
-      // Bank-wise breakdown
-      const rawBankStats = await db
+      // Card balances calculations
+      const myCards = await db
         .select({
+          id: userCards.id,
+          lastFour: userCards.lastFourDigits,
+          cardName: bankCards.name,
           bankName: banks.name,
           bankLogo: banks.logo,
-          spent: sql<number>`sum(${transactions.amount})`,
-          calculated: sql<number>`sum(${transactions.calculatedCashback})`,
-          manual: sql<number>`sum(${transactions.manualCashbackAdjustment})`
+          bankWebsite: banks.website,
+          initialBalance: userCards.initialBalance,
+          accountType: userCards.accountType,
+          creditLimit: userCards.creditLimit,
+        })
+        .from(userCards)
+        .where(eq(userCards.userId, session.user.id))
+        .leftJoin(bankCards, eq(userCards.bankCardId, bankCards.id))
+        .leftJoin(banks, eq(bankCards.bankId, banks.id));
+
+      const cardSumStats = await db
+        .select({
+          cardId: transactions.userCardId,
+          type: transactions.type,
+          sumAmount: sql<number>`sum(${transactions.amount})`
         })
         .from(transactions)
-        .innerJoin(userCards, eq(transactions.userCardId, userCards.id))
-        .innerJoin(bankCards, eq(userCards.bankCardId, bankCards.id))
-        .innerJoin(banks, eq(bankCards.bankId, banks.id))
+        .where(eq(transactions.userId, session.user.id))
+        .groupBy(transactions.userCardId, transactions.type);
+
+      const transferInStats = await db
+        .select({
+          toCardId: transactions.toUserCardId,
+          sumAmount: sql<number>`sum(${transactions.amount})`
+        })
+        .from(transactions)
         .where(
           and(
             eq(transactions.userId, session.user.id),
-            gte(transactions.transactionDate, firstDayOfMonth)
+            eq(transactions.type, "transfer")
           )
         )
-        .groupBy(banks.id, banks.name, banks.logo);
+        .groupBy(transactions.toUserCardId);
 
-      bankStats = rawBankStats.map(b => {
-        const totalCb = (Number(b.calculated) || 0) + (Number(b.manual) || 0);
-        const totalSpent = Number(b.spent) || 0;
-        return {
-          bankName: b.bankName,
-          bankLogo: b.bankLogo,
-          spent: totalSpent,
-          cashback: totalCb,
-          percentage: totalSpent > 0 ? (totalCb / totalSpent) * 100 : 0
-        };
-      }).sort((a, b) => b.percentage - a.percentage);
+      const cardBalances: Record<number, number> = {};
+      myCards.forEach(c => {
+        cardBalances[c.id] = Number(c.initialBalance) || 0;
+      });
+
+      cardSumStats.forEach(stat => {
+        const cardId = stat.cardId;
+        const amt = Number(stat.sumAmount) || 0;
+        if (cardBalances[cardId] === undefined) return;
+        
+        if (stat.type === "income") {
+          cardBalances[cardId] += amt;
+        } else if (stat.type === "expense" || stat.type === "transfer") {
+          cardBalances[cardId] -= amt;
+        }
+      });
+
+      transferInStats.forEach(stat => {
+        const toCardId = stat.toCardId;
+        if (toCardId === null || cardBalances[toCardId] === undefined) return;
+        const amt = Number(stat.sumAmount) || 0;
+        cardBalances[toCardId] += amt;
+      });
+
+      userCardsWithBalances = myCards.map(c => ({
+        id: c.id,
+        lastFour: c.lastFour,
+        cardName: c.cardName || "",
+        bankName: c.bankName || "",
+        bankLogo: c.bankLogo,
+        bankWebsite: c.bankWebsite,
+        balance: cardBalances[c.id] || 0,
+        accountType: c.accountType,
+        creditLimit: c.creditLimit,
+      }));
 
     } catch (e) {
       console.error("Dashboard query error:", e);
@@ -104,104 +145,117 @@ export default async function Home() {
         
         {/* Header */}
         <header className={flex({ justify: "space-between", align: "center", mb: "40px" })}>
-          <div className={flex({ align: "center", gap: "14px" })}>
-            <a href="/profile" className={css({ w: "52px", h: "52px", borderRadius: "18px", bg: "var(--card-bg)", display: "flex", alignItems: "center", justifyContent: "center", shadow: "0 4px 12px rgba(0,0,0,0.05)", fontSize: "24px", border: "1px solid", borderColor: "var(--border-color)", cursor: "pointer", transition: "all 0.2s", _hover: { transform: "scale(1.05)" } })}>
-              👤
-            </a>
-            <div className={stack({ gap: "0" })}>
-              <p className={css({ fontSize: "14px", color: "var(--secondary-text)", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.02em" })}>Добрый день,</p>
-              <p className={css({ fontSize: "20px", fontWeight: "800", color: "var(--foreground)" })}>{shortName}</p>
-            </div>
-          </div>
-          {session && (
-            <form action={async () => { "use server"; await signOut(); }}>
-              <button className={css({ p: "12px", color: "var(--secondary-text)", bg: "var(--card-bg)", borderRadius: "14px", cursor: "pointer", shadow: "sm", border: "1px solid", borderColor: "var(--border-color)", _hover: { color: "#ef4444" } })}>
-                <LogOut size={22} />
-              </button>
-            </form>
+          {session ? (
+            <>
+              <div className={flex({ align: "center", gap: "14px" })}>
+                <a href="/profile" className={css({ w: "52px", h: "52px", borderRadius: "18px", bg: "var(--card-bg)", display: "flex", alignItems: "center", justifyContent: "center", shadow: "0 4px 12px rgba(0,0,0,0.05)", fontSize: "24px", border: "1px solid", borderColor: "var(--border-color)", cursor: "pointer", transition: "all 0.2s", _hover: { transform: "scale(1.05)" } })}>
+                  👤
+                </a>
+                <div className={stack({ gap: "0" })}>
+                  <p className={css({ fontSize: "14px", color: "var(--secondary-text)", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.02em" })}>Добрый день,</p>
+                  <p className={css({ fontSize: "20px", fontWeight: "800", color: "var(--foreground)" })}>{shortName}</p>
+                </div>
+              </div>
+              <div className={flex({ align: "center", gap: "10px" })}>
+                <ThemeIconButton />
+                <form action={async () => { "use server"; await signOut(); }}>
+                  <button className={css({ p: "12px", color: "var(--secondary-text)", bg: "var(--card-bg)", borderRadius: "14px", cursor: "pointer", shadow: "sm", border: "1px solid", borderColor: "var(--border-color)", _hover: { color: "#ef4444" } })}>
+                    <LogOut size={22} />
+                  </button>
+                </form>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className={flex({ align: "center", gap: "8px" })}>
+                <div className={css({ w: "32px", h: "32px", bg: "sberGreen", borderRadius: "10px", display: "flex", alignItems: "center", justifyContent: "center", color: "white" })}>
+                  <ShieldCheck size={18} />
+                </div>
+                <span className={css({ fontSize: "18px", fontWeight: "800", color: "var(--foreground)" })}>Кешбэк Трекер</span>
+              </div>
+              <ThemeIconButton />
+            </>
           )}
         </header>
 
         <main>
           {session ? (
-            <div className={stack({ gap: "24px" })}>
-              <h2 className={css({ fontSize: "22px", fontWeight: "900", color: "var(--foreground)", mb: "8px" })}>Итоги месяца</h2>
-              
-              <div className={grid({ columns: { base: 1, sm: 2, lg: 3 }, gap: "16px" })}>
-                {/* Spent */}
-                <div className="sber-card">
-                  <p className="sber-label" style={{ marginBottom: "8px" }}>ПОТРАЧЕНО В ЭТОМ МЕСЯЦЕ</p>
-                  <p className={css({ fontSize: "32px", fontWeight: "900", color: "var(--foreground)" })}>
-                    {spentThisMonth.toLocaleString('ru-RU')} <span className={css({ fontSize: "20px", color: "#94a3b8" })}>₽</span>
-                  </p>
-                </div>
-
-                {/* Cashback */}
-                <div className="sber-card" style={{ background: "linear-gradient(135deg, #21a038 0%, #2ecc71 100%)", color: "white" }}>
-                  <p className={css({ fontSize: "11px", fontWeight: "800", color: "rgba(255,255,255,0.8)", mb: "8px", textTransform: "uppercase", letterSpacing: "0.5px" })}>ПОЛУЧЕНО КЕШБЭКА</p>
-                  <p className={css({ fontSize: "32px", fontWeight: "900" })}>
-                    {cashbackThisMonth.toLocaleString('ru-RU')} <span className={css({ fontSize: "20px", opacity: 0.8 })}>₽</span>
-                  </p>
-                </div>
-
-                {/* Average % */}
-                <div className="sber-card">
-                  <div className={flex({ justify: "space-between", align: "center" })}>
-                    <div>
-                      <p className="sber-label" style={{ marginBottom: "4px" }}>СРЕДНИЙ ПРОЦЕНТ</p>
-                      <p className={css({ fontSize: "28px", fontWeight: "900", color: "sberGreen" })}>
-                        {avgPercentage.toFixed(2)}%
-                      </p>
-                    </div>
-                    <div className={css({ w: "54px", h: "54px", bg: "rgba(33, 160, 56, 0.1)", borderRadius: "16px", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--sber-green)" })}>
-                      <Percent size={28} strokeWidth={3} />
-                    </div>
-                  </div>
-                </div>
+            <div className={stack({ gap: "20px" })}>
+              <div className={flex({ justify: "space-between", align: "center", px: "4px" })}>
+                <h2 className={css({ fontSize: "18px", fontWeight: "800", color: "var(--foreground)" })}>Карты и счета</h2>
+                <a href="/cards" className={css({ fontSize: "14px", fontWeight: "800", color: "sberGreen", textDecoration: "none", display: "flex", alignItems: "center", gap: "2px", _hover: { textDecoration: "underline" } })}>
+                  Управлять <ChevronRight size={16} />
+                </a>
               </div>
 
-              {bankStats.length > 0 && (
-                <section className={stack({ gap: "16px", mt: "8px" })}>
-                  <h2 className={css({ fontSize: "18px", fontWeight: "800", color: "var(--foreground)", px: "4px" })}>По банкам</h2>
-                  <div className={grid({ columns: { base: 1, sm: 2, lg: 3 }, gap: "12px" })}>
-                    {bankStats.map((bank, idx) => (
-                      <div key={idx} className="sber-card" style={{ padding: "16px" }}>
-                        <div className={flex({ justify: "space-between", align: "center" })}>
-                          <div className={flex({ align: "center", gap: "12px" })}>
-                            {bank.bankLogo ? (
-                              <img src={bank.bankLogo} alt={bank.bankName} className={css({ w: "32px", h: "32px", borderRadius: "8px", objectFit: "contain" })} />
-                            ) : (
-                              <div className={css({ w: "32px", h: "32px", bg: "var(--input-bg)", borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "14px" })}>🏦</div>
+              {userCardsWithBalances.length === 0 ? (
+                <div className={css({ py: "32px", textAlign: "center", color: "secondaryText", bg: "var(--card-bg)", borderRadius: "24px", border: "1px dashed #cbd5e1", fontSize: "14px" })}>
+                  У вас пока нет добавленных карт. Добавьте в разделе "Управлять".
+                </div>
+              ) : (
+                <div className="sber-card" style={{ padding: "8px 16px" }}>
+                  <div className={stack({ gap: "0" })}>
+                    {userCardsWithBalances.map((card, idx) => {
+                      const bankIcon = getIconUrl({ logo: card.bankLogo, website: card.bankWebsite, name: card.bankName });
+                      const isNegative = card.balance < 0;
+                      return (
+                        <a 
+                          key={card.id} 
+                          href={`/cards/${card.id}`} 
+                          className={flex({ 
+                            justify: "space-between", 
+                            align: "center", 
+                            py: "12px", 
+                            textDecoration: "none", 
+                            color: "inherit",
+                            borderBottom: idx === userCardsWithBalances.length - 1 ? "none" : "1px solid var(--separator)",
+                            _hover: { opacity: 0.8 } 
+                          })}
+                        >
+                          <div className={flex({ align: "center", gap: "10px", minW: 0 })}>
+                            <div className={css({ 
+                              w: "28px", 
+                              h: "28px", 
+                              borderRadius: "8px", 
+                              bg: "var(--surface-secondary)", 
+                              border: "1px solid var(--border-color)", 
+                              overflow: "hidden", 
+                              display: "flex", 
+                              alignItems: "center", 
+                              justifyContent: "center",
+                              flexShrink: 0 
+                            })}>
+                              {bankIcon ? (
+                                <img src={bankIcon} className={css({ w: "full", h: "full", objectFit: "contain", p: "2px" })} alt={card.bankName} />
+                              ) : (
+                                <Landmark size={14} color="var(--secondary-text)" />
+                              )}
+                            </div>
+                            <div className={stack({ gap: "0", minW: 0 })}>
+                              <span className={css({ fontWeight: "700", fontSize: "14px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: "var(--foreground)" })}>
+                                {card.bankName} {card.cardName}
+                              </span>
+                              <span className={css({ fontSize: "11px", color: "var(--secondary-text)", fontWeight: "600" })}>
+                                {getAccountTypeLabel(card.accountType)} {card.lastFour ? `• ${card.lastFour}` : ''}
+                              </span>
+                            </div>
+                          </div>
+                          <div className={stack({ align: "end", gap: "0", flexShrink: 0 })}>
+                            <span className={css({ fontWeight: "900", fontSize: "15px", color: isNegative ? "#ef4444" : "var(--foreground)" })}>
+                              {card.balance.toLocaleString("ru-RU")} ₽
+                            </span>
+                            {card.accountType === "credit" && card.creditLimit !== null && (
+                              <span className={css({ fontSize: "10px", color: "#f97316", fontWeight: "700" })}>
+                                Лимит: {card.creditLimit.toLocaleString("ru-RU")} ₽
+                              </span>
                             )}
-                            <div className={stack({ gap: "0" })}>
-                              <p className={css({ fontSize: "15px", fontWeight: "700", color: "var(--foreground)" })}>{bank.bankName}</p>
-                              <p className={css({ fontSize: "12px", color: "secondaryText", fontWeight: "600" })}>
-                                {bank.spent.toLocaleString('ru-RU')} ₽ потрачено
-                              </p>
-                            </div>
                           </div>
-                          <div className={stack({ align: "flex-end", gap: "0" })}>
-                            <p className={css({ fontSize: "16px", fontWeight: "800", color: "sberGreen" })}>
-                              +{bank.cashback.toLocaleString('ru-RU')} ₽
-                            </p>
-                            <div className={flex({ align: "center", gap: "4px" })}>
-                              <p className={css({ fontSize: "12px", fontWeight: "700", px: "6px", py: "2px", bg: "rgba(33, 160, 56, 0.1)", color: "var(--sber-green)", borderRadius: "6px" })}>
-                                {bank.percentage.toFixed(1)}%
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
+                        </a>
+                      );
+                    })}
                   </div>
-                </section>
+                </div>
               )}
-
-              <section className={css({ mt: "16px", p: "20px", bg: "var(--surface-secondary)", borderRadius: "24px", border: "1px solid", borderColor: "var(--border-color)" })}>
-                <p className={css({ fontSize: "13px", color: "#64748b", lineHeight: "1.5", textAlign: "center" })}>
-                  Вся информация обновляется автоматически при добавлении новых покупок.
-                </p>
-              </section>
             </div>
           ) : (
             <div className={stack({ align: "center", py: "40px", gap: "40px" })}>

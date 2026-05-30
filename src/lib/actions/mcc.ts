@@ -33,13 +33,23 @@ export async function createMccCode(formData: FormData) {
 }
 
 import { recalculateTransactionsForBankCard } from "./transactions";
-import { bankCategories } from "@/db/schema";
+import { bankCategories, bankCards } from "@/db/schema";
+
+async function recalculateTransactionsForLoyaltyProgram(loyaltyProgramId: number) {
+  const cards = await db
+    .select({ id: bankCards.id })
+    .from(bankCards)
+    .where(eq(bankCards.loyaltyProgramId, loyaltyProgramId));
+  for (const card of cards) {
+    await recalculateTransactionsForBankCard(card.id);
+  }
+}
 
 export async function linkMccToCategory(categoryId: number, mccCode: string, startDate?: string) {
   const session = await auth();
   if (session?.user?.role !== "admin") throw new Error("Unauthorized");
 
-  const [cat] = await db.select({ startDate: bankCategories.startDate, bankCardId: bankCategories.bankCardId }).from(bankCategories).where(eq(bankCategories.id, categoryId));
+  const [cat] = await db.select({ startDate: bankCategories.startDate, loyaltyProgramId: bankCategories.loyaltyProgramId }).from(bankCategories).where(eq(bankCategories.id, categoryId));
   const effectiveDate = startDate || "2000-01-01";
 
   // Expire any existing active link for this MCC in this category
@@ -59,7 +69,7 @@ export async function linkMccToCategory(categoryId: number, mccCode: string, sta
     startDate: effectiveDate,
   });
 
-  if (cat) await recalculateTransactionsForBankCard(cat.bankCardId);
+  if (cat) await recalculateTransactionsForLoyaltyProgram(cat.loyaltyProgramId);
 
   revalidatePath(`/admin/categories/${categoryId}/composition`);
 }
@@ -71,7 +81,7 @@ export async function linkMultipleMccToCategory(categoryId: number, mccText: str
   const codes = [...new Set(mccText.match(/\b\d{4}\b/g) || [])];
   if (codes.length === 0) return;
 
-  const [cat] = await db.select({ startDate: bankCategories.startDate, bankCardId: bankCategories.bankCardId }).from(bankCategories).where(eq(bankCategories.id, categoryId));
+  const [cat] = await db.select({ startDate: bankCategories.startDate, loyaltyProgramId: bankCategories.loyaltyProgramId }).from(bankCategories).where(eq(bankCategories.id, categoryId));
   const effectiveDate = "2000-01-01";
   const yesterday = new Date(new Date(effectiveDate).getTime() - 86400000).toISOString().split('T')[0];
 
@@ -97,7 +107,7 @@ export async function linkMultipleMccToCategory(categoryId: number, mccText: str
     });
   }
 
-  if (cat) await recalculateTransactionsForBankCard(cat.bankCardId);
+  if (cat) await recalculateTransactionsForLoyaltyProgram(cat.loyaltyProgramId);
 
   revalidatePath(`/admin/categories/${categoryId}/composition`);
 }
@@ -120,8 +130,8 @@ export async function unlinkMccFromCategory(categoryId: number, mccCode: string,
     );
 
   // Find bankCardId to recalculate
-  const [cat] = await db.select({ bankCardId: bankCategories.bankCardId }).from(bankCategories).where(eq(bankCategories.id, categoryId));
-  if (cat) await recalculateTransactionsForBankCard(cat.bankCardId);
+  const [cat] = await db.select({ loyaltyProgramId: bankCategories.loyaltyProgramId }).from(bankCategories).where(eq(bankCategories.id, categoryId));
+  if (cat) await recalculateTransactionsForLoyaltyProgram(cat.loyaltyProgramId);
 
   revalidatePath(`/admin/categories/${categoryId}/composition`);
 }
@@ -133,7 +143,7 @@ export async function linkMerchantToCategory(categoryId: number, merchantId: num
   const session = await auth();
   if (session?.user?.role !== "admin") throw new Error("Unauthorized");
 
-  const [cat] = await db.select({ startDate: bankCategories.startDate, bankCardId: bankCategories.bankCardId }).from(bankCategories).where(eq(bankCategories.id, categoryId));
+  const [cat] = await db.select({ startDate: bankCategories.startDate, loyaltyProgramId: bankCategories.loyaltyProgramId }).from(bankCategories).where(eq(bankCategories.id, categoryId));
   const [merchant] = await db.select({ name: merchants.name }).from(merchants).where(eq(merchants.id, merchantId));
   const effectiveDate = "2000-01-01";
 
@@ -158,7 +168,7 @@ export async function linkMerchantToCategory(categoryId: number, merchantId: num
     await recalculateTransactionsForMerchantNames([merchant.name]);
   }
   if (cat) {
-    await recalculateTransactionsForBankCard(cat.bankCardId);
+    await recalculateTransactionsForLoyaltyProgram(cat.loyaltyProgramId);
   }
 
   revalidatePath(`/admin/categories/${categoryId}/composition`);
@@ -181,8 +191,8 @@ export async function unlinkMerchantFromCategory(categoryId: number, merchantId:
       )
     );
 
-  const [cat] = await db.select({ bankCardId: bankCategories.bankCardId }).from(bankCategories).where(eq(bankCategories.id, categoryId));
-  if (cat) await recalculateTransactionsForBankCard(cat.bankCardId);
+  const [cat] = await db.select({ loyaltyProgramId: bankCategories.loyaltyProgramId }).from(bankCategories).where(eq(bankCategories.id, categoryId));
+  if (cat) await recalculateTransactionsForLoyaltyProgram(cat.loyaltyProgramId);
 
   revalidatePath(`/admin/categories/${categoryId}/composition`);
 }

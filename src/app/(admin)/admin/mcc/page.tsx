@@ -3,8 +3,9 @@ import { mccCodes } from "@/db/schema";
 import { createMccCode, syncMccCodes } from "@/lib/actions/mcc";
 import { css } from "../../../../../styled-system/css";
 import { stack, flex, grid } from "../../../../../styled-system/patterns";
-import { Hash, Plus, Tag, RefreshCw } from "lucide-react";
+import { Plus, Tag, RefreshCw } from "lucide-react";
 import { asc } from "drizzle-orm";
+import AdminMccList from "@/components/admin/AdminMccList";
 
 export default async function MccPage() {
   const allMcc = await db.select().from(mccCodes).orderBy(asc(mccCodes.code));
@@ -86,29 +87,9 @@ export default async function MccPage() {
       {/* Список кодов */}
       <section className={stack({ gap: "16px" })}>
         <h3 className="sber-label">БАЗА КОДОВ</h3>
-        <div className={grid({ columns: { base: 1, sm: 2, lg: 3 }, gap: "12px" })}>
-          {allMcc.map((mcc) => (
-            <div key={mcc.code} className="sber-card" style={{ padding: '14px', display: 'flex', alignItems: 'center', gap: '16px' }}>
-              <div className={css({ minW: "44px", h: "44px", bg: "#f8fafc", borderRadius: "10px", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid", borderColor: "#f1f5f9", color: "#21a038", fontWeight: "800", fontSize: "13px" })}>
-                {mcc.code}
-              </div>
-              <div className={stack({ gap: "0", flex: "1", overflow: "hidden" })}>
-                <p className={css({ fontWeight: "700", fontSize: "14px", color: "var(--foreground)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" })} title={mcc.description}>
-                  {mcc.description}
-                </p>
-                <p className={css({ fontSize: "10px", color: "secondaryText", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" })} title={mcc.fullDescription}>
-                  {mcc.fullDescription || "Нет описания"}
-                </p>
-              </div>
-            </div>
-          ))}
-          {allMcc.length === 0 && (
-            <div className={css({ gridColumn: "1/-1", py: "40px", textAlign: "center", color: "secondaryText", bg: "var(--card-bg)", borderRadius: "24px" })}>
-              Справочник пуст
-            </div>
-          )}
-        </div>
+        <AdminMccList mccCodesList={allMcc} />
       </section>
     </div>
   );
 }
+

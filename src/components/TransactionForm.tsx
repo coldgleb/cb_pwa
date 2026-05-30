@@ -3,7 +3,7 @@
 import { useState, useMemo, useTransition, useEffect } from "react";
 import { css } from "../../styled-system/css";
 import { stack, flex } from "../../styled-system/patterns";
-import { ShoppingBag, Users, Save, X, PlusCircle, Calendar, Clock } from "lucide-react";
+import { ShoppingBag, Users, Save, X, PlusCircle, Calendar, Clock, TrendingUp, ArrowRightLeft } from "lucide-react";
 import SearchableSelect from "./SearchableSelect";
 import DatePicker from "./DatePicker";
 import TimePicker from "./TimePicker";
@@ -59,9 +59,11 @@ interface TransactionFormProps {
     id: number;
     amount: number;
     paidAmount: number | null;
-    merchantName: string;
+    merchantName: string | null;
     mccCode: string | null;
     userCardId: number;
+    toUserCardId?: number | null;
+    type?: string | null;
     transactionDate: Date;
     manualCashbackAdjustment: number;
     customCategoryName: string | null;
@@ -89,6 +91,12 @@ export default function TransactionForm({ cards, merchants, mccs, templates = []
   const router = useRouter();
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
+  const [type, setType] = useState<"expense" | "income" | "transfer">(
+    initialData?.type ? (initialData.type as any) : "expense"
+  );
+  const [selectedToUserCardId, setSelectedToUserCardId] = useState(
+    initialData?.toUserCardId?.toString() || ""
+  );
   const [isSplit, setIsSplit] = useState(initialData ? (initialData.paidAmount !== null && initialData.paidAmount !== initialData.amount) : false);
   
   // amount is the value for "Сумма" (simple mode) OR "Моя доля" (split mode)
@@ -310,35 +318,50 @@ export default function TransactionForm({ cards, merchants, mccs, templates = []
       formData.append("transactionDateIso", utcDate.toISOString());
     }
 
-    const totalSplitAmount = splits.reduce((sum, s) => sum + (parseFloat(s.amount) || 0), 0);
-    const mainAmount = parseFloat(amount) || 0;
-    
-    if (Math.abs(totalSplitAmount - mainAmount) > 0.01) {
-      toast(`Сумма категорий (${totalSplitAmount.toFixed(2)} ₽) не совпадает с суммой покупки (${mainAmount.toFixed(2)} ₽)`, "error");
-      return;
+    formData.append("type", type);
+    if (type === "transfer") {
+      formData.append("toUserCardId", selectedToUserCardId);
     }
 
-    // New logic: Optional categories with reminder, unless it's a new merchant
-    const hasMainCategory = splits.length > 0 && splits[0].categoryId;
-    if (!hasMainCategory) {
-      if (isNewMerchant) {
-        toast("Для нового магазина необходимо выбрать категорию, чтобы она сохранилась как основная", "error");
+    if (type === "expense") {
+      const totalSplitAmount = splits.reduce((sum, s) => sum + (parseFloat(s.amount) || 0), 0);
+      const mainAmount = parseFloat(amount) || 0;
+      
+      if (Math.abs(totalSplitAmount - mainAmount) > 0.01) {
+        toast(`Сумма категорий (${totalSplitAmount.toFixed(2)} ₽) не совпадает с суммой покупки (${mainAmount.toFixed(2)} ₽)`, "error");
         return;
       }
-      if (!confirm("Вы не выбрали категорию для статистики. Сохранить операцию без категории?")) {
-        return;
-      }
-    }
 
-    // Filter out splits with empty categories
-    const validSplits = splits.filter(s => s.categoryId && s.amount);
-    
-    if (validSplits.length > 0) {
-      formData.append("splits", JSON.stringify(validSplits));
-      formData.append("spendingCategoryId", validSplits[0].categoryId);
+      // New logic: Optional categories with reminder, unless it's a new merchant
+      const hasMainCategory = splits.length > 0 && splits[0].categoryId;
+      if (!hasMainCategory) {
+        if (isNewMerchant) {
+          toast("Для нового магазина необходимо выбрать категорию, чтобы она сохранилась как основная", "error");
+          return;
+        }
+        if (!confirm("Вы не выбрали категорию для статистики. Сохранить операцию без категории?")) {
+          return;
+        }
+      }
+
+      // Filter out splits with empty categories
+      const validSplits = splits.filter(s => s.categoryId && s.amount);
+      
+      if (validSplits.length > 0) {
+        formData.append("splits", JSON.stringify(validSplits));
+        formData.append("spendingCategoryId", validSplits[0].categoryId);
+      } else {
+        formData.append("splits", "[]");
+        formData.append("spendingCategoryId", "");
+      }
     } else {
+      // Income or transfer
       formData.append("splits", "[]");
-      formData.append("spendingCategoryId", "");
+      if (type === "income" && selectedSpendingCategoryId) {
+        formData.append("spendingCategoryId", selectedSpendingCategoryId);
+      } else {
+        formData.append("spendingCategoryId", "");
+      }
     }
 
     startTransition(async () => {
@@ -349,7 +372,7 @@ export default function TransactionForm({ cards, merchants, mccs, templates = []
           router.push("/transactions");
         } else {
           await createTransaction(formData);
-          if (saveAsTemplate && templateName) {
+          if (type === "expense" && saveAsTemplate && templateName) {
             const templateData = new FormData();
             templateData.append("templateName", templateName);
             templateData.append("amount", formData.get("amount") as string);
@@ -412,8 +435,15 @@ export default function TransactionForm({ cards, merchants, mccs, templates = []
     <section className="sber-card">
       <div className={flex({ align: "center", justify: "space-between", mb: "24px" })}>
         <div className={flex({ align: "center", gap: "10px" })}>
-          <div className={css({ p: "6px", bg: "#3b82f6", borderRadius: "8px", color: "white" })}>
-            <ShoppingBag size={18} />
+          <div className={css({ 
+            p: "6px", 
+            bg: type === "expense" ? "#3b82f6" : type === "income" ? "sberGreen" : "#f59e0b", 
+            borderRadius: "8px", 
+            color: "white" 
+          })}>
+            {type === "expense" && <ShoppingBag size={18} />}
+            {type === "income" && <TrendingUp size={18} />}
+            {type === "transfer" && <ArrowRightLeft size={18} />}
           </div>
           <h2 className={css({ fontSize: "17px", fontWeight: "700", color: "var(--foreground)" })}>
             {initialData ? "Редактирование" : "Детали операции"}
@@ -421,8 +451,80 @@ export default function TransactionForm({ cards, merchants, mccs, templates = []
         </div>
       </div>
 
-      {/* Templates Row */}
-      {!initialData && templates.length > 0 && (
+      {/* Tabs for operation type */}
+      {!initialData && (
+        <div className={flex({ gap: "4px", p: "4px", bg: "var(--surface-secondary)", borderRadius: "12px", mb: "24px" })}>
+          <button
+            type="button"
+            onClick={() => {
+              setType("expense");
+              setIsSplit(false);
+            }}
+            className={css({
+              flex: 1,
+              py: "8px",
+              fontSize: "14px",
+              fontWeight: "700",
+              borderRadius: "8px",
+              cursor: "pointer",
+              transition: "all 0.2s",
+              bg: type === "expense" ? "var(--card-bg)" : "transparent",
+              color: type === "expense" ? "var(--foreground)" : "var(--secondary-text)",
+              border: "none",
+              boxShadow: type === "expense" ? "0 2px 8px rgba(0,0,0,0.05)" : "none"
+            })}
+          >
+            Расход
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setType("income");
+              setIsSplit(false);
+            }}
+            className={css({
+              flex: 1,
+              py: "8px",
+              fontSize: "14px",
+              fontWeight: "700",
+              borderRadius: "8px",
+              cursor: "pointer",
+              transition: "all 0.2s",
+              bg: type === "income" ? "var(--card-bg)" : "transparent",
+              color: type === "income" ? "var(--foreground)" : "var(--secondary-text)",
+              border: "none",
+              boxShadow: type === "income" ? "0 2px 8px rgba(0,0,0,0.05)" : "none"
+            })}
+          >
+            Доход
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setType("transfer");
+              setIsSplit(false);
+            }}
+            className={css({
+              flex: 1,
+              py: "8px",
+              fontSize: "14px",
+              fontWeight: "700",
+              borderRadius: "8px",
+              cursor: "pointer",
+              transition: "all 0.2s",
+              bg: type === "transfer" ? "var(--card-bg)" : "transparent",
+              color: type === "transfer" ? "var(--foreground)" : "var(--secondary-text)",
+              border: "none",
+              boxShadow: type === "transfer" ? "0 2px 8px rgba(0,0,0,0.05)" : "none"
+            })}
+          >
+            Перевод
+          </button>
+        </div>
+      )}
+
+      {/* Templates Row (Only for Expense) */}
+      {type === "expense" && !initialData && templates.length > 0 && (
         <div className={stack({ gap: "8px", mb: "24px" })}>
           <label className="sber-label">БЫСТРЫЙ ВВОД</label>
           <div className={flex({ gap: "8px", wrap: "wrap" })}>
@@ -463,40 +565,43 @@ export default function TransactionForm({ cards, merchants, mccs, templates = []
 
       <form action={action} className={stack({ gap: "24px" })}>
         
-        {/* Split Check Toggle */}
-        <div 
-          role="button"
-          tabIndex={0}
-          onClick={toggleSplit}
-          className={flex({ 
-            align: "center", 
-            gap: "12px", 
-            p: "12px", 
-            bg: "var(--surface-secondary)", 
-            border: "1px solid",
-            borderColor: "var(--border-color)",
-            borderRadius: "14px", 
-            cursor: "pointer", 
-            userSelect: "none", 
-            WebkitTapHighlightColor: "transparent",
-            wrap: "wrap" 
-          })}
-        >
-          <div className={css({ 
-            w: "40px", h: "24px", bg: isSplit ? "sberGreen" : "#cbd5e1", borderRadius: "full", position: "relative", transition: "all 0.2s", flexShrink: 0
-          })}>
+        {/* Split Check Toggle (Only for Expense) */}
+        {type === "expense" && (
+          <div 
+            role="button"
+            tabIndex={0}
+            onClick={toggleSplit}
+            className={flex({ 
+              align: "center", 
+              gap: "12px", 
+              p: "12px", 
+              bg: "var(--surface-secondary)", 
+              border: "1px solid",
+              borderColor: "var(--border-color)",
+              borderRadius: "14px", 
+              cursor: "pointer", 
+              userSelect: "none", 
+              WebkitTapHighlightColor: "transparent",
+              wrap: "wrap" 
+            })}
+          >
             <div className={css({ 
-              position: "absolute", top: "2px", left: isSplit ? "18px" : "2px", w: "20px", h: "20px", bg: "white", borderRadius: "full", shadow: "sm", transition: "all 0.2s" 
-            })} />
+              w: "40px", h: "24px", bg: isSplit ? "sberGreen" : "#cbd5e1", borderRadius: "full", position: "relative", transition: "all 0.2s", flexShrink: 0
+            })}>
+              <div className={css({ 
+                position: "absolute", top: "2px", left: isSplit ? "18px" : "2px", w: "20px", h: "20px", bg: "white", borderRadius: "full", shadow: "sm", transition: "all 0.2s" 
+              })} />
+            </div>
+            <div className={flex({ align: "center", gap: "8px", flex: 1, minW: "200px" })}>
+              <Users size={16} className={css({ color: isSplit ? "sberGreen" : "#64748b" })} />
+              <span className={css({ fontSize: "14px", fontWeight: "600", color: "var(--foreground)" })}>Оплачивал за других (разделить чек)</span>
+            </div>
           </div>
-          <div className={flex({ align: "center", gap: "8px", flex: 1, minW: "200px" })}>
-            <Users size={16} className={css({ color: isSplit ? "sberGreen" : "#64748b" })} />
-            <span className={css({ fontSize: "14px", fontWeight: "600", color: "var(--foreground)" })}>Оплачивал за других (разделить чек)</span>
-          </div>
-        </div>
+        )}
 
-        <div className={stack({ gap: "16px" })}>
-          {isSplit ? (
+        {/* Amount input */}
+        <div className={stack({ gap: "6px" })}>
+          {type === "expense" && isSplit ? (
             <div className={flex({ gap: "12px", wrap: { base: "wrap", sm: "nowrap" } })}>
               <div className={stack({ gap: "6px", flex: 1, minW: "140px" })}>
                 <label className="sber-label">ОБЩИЙ ЧЕК</label>
@@ -550,10 +655,13 @@ export default function TransactionForm({ cards, merchants, mccs, templates = []
           )}
         </div>
 
-
-
+        {/* Card Source/Target Selector */}
         <div className={stack({ gap: "6px" })}>
-          <label className="sber-label">КАРТА</label>
+          <label className="sber-label">
+            {type === "expense" && "КАРТА / СЧЕТ"}
+            {type === "income" && "КАРТА / СЧЕТ ЗАЧИСЛЕНИЯ"}
+            {type === "transfer" && "ОТКУДА (КАРТА / СЧЕТ СПИСАНИЯ)"}
+          </label>
           <SearchableSelect 
             name="userCardId" 
             required 
@@ -563,100 +671,143 @@ export default function TransactionForm({ cards, merchants, mccs, templates = []
               value: card.id.toString(),
               label: `${card.bankName} ${card.cardName} ${card.lastFour ? `• ${card.lastFour}` : ''}`
             }))}
-            placeholder="Выберите карту..."
+            placeholder="Выберите карту/счет..."
           />
         </div>
 
-        <div className={stack({ gap: "6px" })}>
-          <label className="sber-label">МАГАЗИН / МЕРЧАНТ</label>
-          <SearchableSelect 
-            name="merchantName"
-            options={merchantOptions}
-            required
-            allowCustom
-            value={selectedMerchantName}
-            placeholder="Выберите торговую точку..."
-            onChange={handleMerchantChange}
-          />
-        </div>
-
-        <div className={stack({ gap: "6px" })}>
-          <label className="sber-label">КАТЕГОРИИ</label>
-          
-          <div className={stack({ gap: "12px" })}>
-            {splits.map((split, index) => (
-              <div key={index} className={flex({ gap: "8px", align: "flex-start" })}>
-                <div className={css({ flex: 1 })}>
-                  <SearchableSelect 
-                    name={`split_cat_${index}`}
-                    options={spendingCategories}
-                    value={split.categoryId}
-                    onChange={(val) => updateSplit(index, "categoryId", val)}
-                    placeholder="Категория"
-                  />
-                </div>
-                <div className={css({ w: "100px" })}>
-                  <input 
-                    type="text"
-                    inputMode="decimal"
-                    value={split.amount}
-                    onChange={(e) => updateSplit(index, "amount", e.target.value)}
-                    onBlur={() => handleSplitBlur(index)}
-                    placeholder="₽"
-                    readOnly={index === 0}
-                    className="sber-input"
-                    style={{ 
-                      padding: "12px", 
-                      fontSize: "14px",
-                      backgroundColor: index === 0 ? "var(--surface-secondary)" : undefined,
-                      cursor: index === 0 ? "not-allowed" : "text",
-                      opacity: index === 0 ? 0.8 : 1,
-                      borderStyle: index === 0 ? "dashed" : "solid"
-                    }}
-                  />
-                </div>
-                {index > 0 ? (
-                  <button 
-                    type="button" 
-                    onClick={() => removeSplit(index)}
-                    className={css({ p: "12px", color: "var(--secondary-text)", _hover: { color: "red.500" }, cursor: "pointer" })}
-                  >
-                    <X size={20} />
-                  </button>
-                ) : (
-                  <div className={css({ w: "44px" })} />
-                )}
-              </div>
-            ))}
-            <div className={flex({ justify: "space-between", align: "center" })}>
-              <button 
-                type="button" 
-                onClick={addSplit}
-                className={flex({ align: "center", gap: "6px", fontSize: "13px", fontWeight: "700", color: "sberGreen", cursor: "pointer", bg: "transparent", border: "none" })}
-              >
-                <PlusCircle size={16} /> ЕЩЕ КАТЕГОРИЯ
-              </button>
-            </div>
+        {/* Transfer Destination Card Selector */}
+        {type === "transfer" && (
+          <div className={stack({ gap: "6px" })}>
+            <label className="sber-label">КУДА (КАРТА / СЧЕТ ЗАЧИСЛЕНИЯ)</label>
+            <SearchableSelect 
+              name="toUserCardId" 
+              required 
+              value={selectedToUserCardId}
+              onChange={setSelectedToUserCardId}
+              options={cards.map(card => ({
+                value: card.id.toString(),
+                label: `${card.bankName} ${card.cardName} ${card.lastFour ? `• ${card.lastFour}` : ''}`
+              }))}
+              placeholder="Выберите получателя..."
+            />
           </div>
-          
-          <p className={css({ fontSize: "11px", color: "secondaryText", ml: "4px" })}>
-            Это ваши личные категории для статистики. Помогают, когда банк ошибся.
-          </p>
-        </div>
+        )}
 
-        <div className={stack({ gap: "6px" })}>
-          <label className="sber-label">MCC-КОД</label>
-          <SearchableSelect 
-            name="mccCode"
-            options={mccOptions}
-            required
-            placeholder={isSearchingMcc ? "Ищем подходящие коды..." : (selectedMerchantName ? "Выберите MCC из списка магазина..." : "Сначала выберите магазин")}
-            value={selectedMcc}
-            onChange={setSelectedMcc}
-            disabled={isSearchingMcc}
-          />
-        </div>
+        {/* Merchant/Sender Field */}
+        {(type === "expense" || type === "income") && (
+          <div className={stack({ gap: "6px" })}>
+            <label className="sber-label">
+              {type === "expense" ? "МАГАЗИН / МЕРЧАНТ" : "ОТПРАВИТЕЛЬ / ИСТОЧНИК (ОПЦИОНАЛЬНО)"}
+            </label>
+            <SearchableSelect 
+              name="merchantName"
+              options={merchantOptions}
+              required={type === "expense"}
+              allowCustom
+              value={selectedMerchantName}
+              placeholder={type === "expense" ? "Выберите торговую точку..." : "Например: Зарплата, Перевод от мамы..."}
+              onChange={handleMerchantChange}
+            />
+          </div>
+        )}
 
+        {/* Categories Field */}
+        {type === "expense" && (
+          <div className={stack({ gap: "6px" })}>
+            <label className="sber-label">КАТЕГОРИИ</label>
+            
+            <div className={stack({ gap: "12px" })}>
+              {splits.map((split, index) => (
+                <div key={index} className={flex({ gap: "8px", align: "flex-start" })}>
+                  <div className={css({ flex: 1 })}>
+                    <SearchableSelect 
+                      name={`split_cat_${index}`}
+                      options={spendingCategories}
+                      value={split.categoryId}
+                      onChange={(val) => updateSplit(index, "categoryId", val)}
+                      placeholder="Категория"
+                    />
+                  </div>
+                  <div className={css({ w: "100px" })}>
+                    <input 
+                      type="text"
+                      inputMode="decimal"
+                      value={split.amount}
+                      onChange={(e) => updateSplit(index, "amount", e.target.value)}
+                      onBlur={() => handleSplitBlur(index)}
+                      placeholder="₽"
+                      readOnly={index === 0}
+                      className="sber-input"
+                      style={{ 
+                        padding: "12px", 
+                        fontSize: "14px",
+                        backgroundColor: index === 0 ? "var(--surface-secondary)" : undefined,
+                        cursor: index === 0 ? "not-allowed" : "text",
+                        opacity: index === 0 ? 0.8 : 1,
+                        borderStyle: index === 0 ? "dashed" : "solid"
+                      }}
+                    />
+                  </div>
+                  {index > 0 ? (
+                    <button 
+                      type="button" 
+                      onClick={() => removeSplit(index)}
+                      className={css({ p: "12px", color: "var(--secondary-text)", _hover: { color: "red.500" }, cursor: "pointer" })}
+                    >
+                      <X size={20} />
+                    </button>
+                  ) : (
+                    <div className={css({ w: "44px" })} />
+                  )}
+                </div>
+              ))}
+              <div className={flex({ justify: "space-between", align: "center" })}>
+                <button 
+                  type="button" 
+                  onClick={addSplit}
+                  className={flex({ align: "center", gap: "6px", fontSize: "13px", fontWeight: "700", color: "sberGreen", cursor: "pointer", bg: "transparent", border: "none" })}
+                >
+                  <PlusCircle size={16} /> ЕЩЕ КАТЕГОРИЯ
+                </button>
+              </div>
+            </div>
+            
+            <p className={css({ fontSize: "11px", color: "secondaryText", ml: "4px" })}>
+              Это ваши личные категории для статистики. Помогают, когда банк ошибся.
+            </p>
+          </div>
+        )}
+
+        {type === "income" && (
+          <div className={stack({ gap: "6px" })}>
+            <label className="sber-label">КАТЕГОРИЯ ДОХОДА (ОПЦИОНАЛЬНО)</label>
+            <SearchableSelect 
+              name="spendingCategoryId"
+              options={spendingCategories}
+              value={selectedSpendingCategoryId}
+              onChange={setSelectedSpendingCategoryId}
+              placeholder="Выберите категорию дохода..."
+            />
+          </div>
+        )}
+
+        {/* MCC Code (Only for Expense) */}
+        {type === "expense" && (
+          <div className={stack({ gap: "6px" })}>
+            <label className="sber-label">MCC-КОД</label>
+            <SearchableSelect 
+              name="mccCode"
+              options={mccOptions}
+              required
+              placeholder={isSearchingMcc ? "Ищем подходящие коды..." : (selectedMerchantName ? "Выберите MCC из списка магазина..." : "Сначала выберите магазин")}
+              value={selectedMcc}
+              onChange={setSelectedMcc}
+              disabled={isSearchingMcc}
+            />
+          </div>
+        )}
+
+        {/* Date and Time */}
         <div className={flex({ gap: "12px" })}>
           <div className={stack({ gap: "6px", flex: 1 })}>
             <label className="sber-label">ДАТА</label>
@@ -676,27 +827,30 @@ export default function TransactionForm({ cards, merchants, mccs, templates = []
           </div>
         </div>
 
-        <div className={stack({ gap: "6px" })}>
-          <label className="sber-label">КОРРЕКТИРОВКА КЕШБЭКА (ОПЦИОНАЛЬНО)</label>
-          <div className={flex({ align: "center", gap: "10px" })}>
-            <input 
-              name="manualAdjustment" 
-              type="number" 
-              step="0.01" 
-              defaultValue={initialData?.manualCashbackAdjustment || ""}
-              placeholder="+50.00 или -20.00"
-              className="sber-input"
-              style={{ fontWeight: "700" }}
-            />
-            <span className={css({ fontSize: "14px", fontWeight: "800", color: "sberGreen" })}>₽</span>
+        {/* Cashback Adjustment (Only for Expense) */}
+        {type === "expense" && (
+          <div className={stack({ gap: "6px" })}>
+            <label className="sber-label">КОРРЕКТИРОВКА КЕШБЭКА (ОПЦИОНАЛЬНО)</label>
+            <div className={flex({ align: "center", gap: "10px" })}>
+              <input 
+                name="manualAdjustment" 
+                type="number" 
+                step="0.01" 
+                defaultValue={initialData?.manualCashbackAdjustment || ""}
+                placeholder="+50.00 или -20.00"
+                className="sber-input"
+                style={{ fontWeight: "700" }}
+              />
+              <span className={css({ fontSize: "14px", fontWeight: "800", color: "sberGreen" })}>₽</span>
+            </div>
+            <p className={css({ fontSize: "11px", color: "secondaryText", ml: "4px" })}>
+              Добавьте бонусы за сторонние акции или скорректируйте расчет банка
+            </p>
           </div>
-          <p className={css({ fontSize: "11px", color: "secondaryText", ml: "4px" })}>
-            Добавьте бонусы за сторонние акции или скорректируйте расчет банка
-          </p>
-        </div>
+        )}
 
-        {/* Save as Template */}
-        {!initialData && (
+        {/* Save as Template (Only for Expense) */}
+        {type === "expense" && !initialData && (
           <div className={stack({ gap: "12px", p: "16px", bg: "var(--surface-secondary)", borderRadius: "14px", border: "1px dashed var(--border-color)" })}>
             <div 
               onClick={() => setSaveAsTemplate(!saveAsTemplate)}
@@ -728,7 +882,9 @@ export default function TransactionForm({ cards, merchants, mccs, templates = []
         )}
 
         <button type="submit" className="sber-button" style={{ marginTop: "8px" }} disabled={isPending}>
-          {isPending ? "Сохранение..." : (initialData ? <><Save size={18} /> Сохранить изменения</> : "Записать покупку")}
+          {isPending ? "Сохранение..." : (initialData ? <><Save size={18} /> Сохранить изменения</> : (
+            type === "expense" ? "Записать расход" : type === "income" ? "Записать доход" : "Записать перевод"
+          ))}
         </button>
       </form>
     </section>

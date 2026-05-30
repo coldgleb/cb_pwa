@@ -14,12 +14,13 @@ interface Card {
   name: string | null;
   bankName: string | null;
   bankCardId: number;
+  loyaltyProgramId: number | null;
 }
 
 interface Category {
   id: number;
   name: string;
-  bankCardId: number;
+  loyaltyProgramId: number;
   defaultPercentage: number;
   startDate: string;
   endDate: string | null;
@@ -33,7 +34,9 @@ interface ActiveRule {
 }
 
 interface MonthlyRulesFormProps {
-  userCards: Card[];
+  loyaltyProgramId: number;
+  loyaltyProgramName: string;
+  bankName: string;
   allCategories: Category[];
   initialMonth: string;
   activeRules: ActiveRule[];
@@ -47,9 +50,11 @@ interface FormRow {
 }
 
 export default function MonthlyRulesForm({ 
-  userCards, 
-  allCategories, 
-  initialMonth, 
+  loyaltyProgramId,
+  loyaltyProgramName,
+  bankName,
+  allCategories,
+  initialMonth,
   activeRules 
 }: MonthlyRulesFormProps) {
   const router = useRouter();
@@ -61,10 +66,8 @@ export default function MonthlyRulesForm({
   const [isCopying, setIsCopying] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  const selectedCard = userCards[0];
-  
   const cardCategories = useMemo(() => {
-    if (!selectedCard || !selectedMonth) return [];
+    if (!loyaltyProgramId || !selectedMonth) return [];
     
     const [year, month] = selectedMonth.split("-").map(Number);
     const monthStart = `${selectedMonth}-01`;
@@ -73,7 +76,7 @@ export default function MonthlyRulesForm({
 
     return allCategories
       .filter(cat => 
-        cat.bankCardId === selectedCard.bankCardId &&
+        cat.loyaltyProgramId === loyaltyProgramId &&
         cat.startDate <= monthEnd &&
         (!cat.endDate || cat.endDate >= monthStart)
       )
@@ -84,7 +87,7 @@ export default function MonthlyRulesForm({
         if (b.name === "Остальные покупки") return 1;
         return a.name.localeCompare(b.name, 'ru');
       });
-  }, [selectedCard, allCategories, selectedMonth]);
+  }, [loyaltyProgramId, allCategories, selectedMonth]);
 
   const selectOptions = useMemo(() => 
     cardCategories
@@ -108,7 +111,7 @@ export default function MonthlyRulesForm({
     const monthEnd = `${initialMonth}-${String(lastDay).padStart(2, "0")}`;
 
     const initialCardCategories = allCategories.filter(cat => 
-      cat.bankCardId === selectedCard.bankCardId &&
+      cat.loyaltyProgramId === loyaltyProgramId &&
       cat.startDate <= monthEnd &&
       (!cat.endDate || cat.endDate >= monthStart)
     );
@@ -194,10 +197,10 @@ export default function MonthlyRulesForm({
   };
 
   const handleCopy = async () => {
-    if (!selectedCard || !selectedMonth || isSaving || isCopying) return;
+    if (!loyaltyProgramId || !selectedMonth || isSaving || isCopying) return;
     setIsCopying(true);
     try {
-      await copyRulesFromPreviousMonth(selectedCard.id, selectedMonth);
+      await copyRulesFromPreviousMonth(loyaltyProgramId, selectedMonth);
       toast("Правила успешно скопированы", "success");
     } catch (e) {
       toast("Не удалось скопировать: " + (e as Error).message, "error");
@@ -257,11 +260,11 @@ export default function MonthlyRulesForm({
       <form action={action} className={stack({ gap: "24px" })}>
         <div className={flex({ gap: "12px" })}>
           <div className={stack({ gap: "6px", flex: 1 })}>
-            <label className="sber-label">КАРТА</label>
+            <label className="sber-label">ПРОГРАММА ЛОЯЛЬНОСТИ</label>
             <div className={css({ px: "16px", py: "14px", bg: "var(--input-bg)", borderRadius: "14px", border: "1px solid var(--border-color)" })}>
-              <input type="hidden" name="userCardId" value={selectedCard.id} />
+              <input type="hidden" name="loyaltyProgramId" value={loyaltyProgramId} />
               <p className={css({ fontSize: "15px", fontWeight: "700", color: "var(--foreground)" })}>
-                {selectedCard.bankName} — {selectedCard.name}
+                {bankName} — {loyaltyProgramName}
               </p>
             </div>
           </div>

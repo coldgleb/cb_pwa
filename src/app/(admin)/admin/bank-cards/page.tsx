@@ -1,16 +1,23 @@
 import { db } from "@/db";
-import { banks, bankCards } from "@/db/schema";
+import { banks, bankCards, loyaltyPrograms } from "@/db/schema";
 import { createBankCard } from "@/lib/actions/bank-cards";
 import { css } from "../../../../../styled-system/css";
-import { stack, flex, grid } from "../../../../../styled-system/patterns";
+import { stack, flex } from "../../../../../styled-system/patterns";
 import { eq, asc } from "drizzle-orm";
-import { CreditCard, Plus, ChevronRight, Landmark } from "lucide-react";
+import { Plus, Landmark } from "lucide-react";
 import SearchableSelect from "@/components/SearchableSelect";
-import { getIconUrl } from "@/lib/utils/icons";
-import ArchiveBankCardButton from "@/components/admin/ArchiveBankCardButton";
+import AdminBankCardsList from "@/components/admin/AdminBankCardsList";
 
 export default async function AdminBankCardsPage() {
   const allBanks = await db.select().from(banks).orderBy(asc(banks.name));
+  const allLoyaltyPrograms = await db.select({
+    id: loyaltyPrograms.id,
+    name: loyaltyPrograms.name,
+    bankName: banks.name,
+  }).from(loyaltyPrograms)
+    .leftJoin(banks, eq(loyaltyPrograms.bankId, banks.id))
+    .orderBy(asc(banks.name), asc(loyaltyPrograms.name));
+
   const allBankCards = await db.select({
     id: bankCards.id,
     name: bankCards.name,
@@ -18,22 +25,21 @@ export default async function AdminBankCardsPage() {
     bankName: banks.name,
     bankLogo: banks.logo,
     bankWebsite: banks.website,
+    loyaltyProgramName: loyaltyPrograms.name,
+    accountType: bankCards.accountType,
   }).from(bankCards)
     .leftJoin(banks, eq(bankCards.bankId, banks.id))
+    .leftJoin(loyaltyPrograms, eq(bankCards.loyaltyProgramId, loyaltyPrograms.id))
     .orderBy(asc(banks.name), asc(bankCards.isArchived), asc(bankCards.name));
-
-  const groupedCards: Record<string, typeof allBankCards> = {};
-  allBankCards.forEach(card => {
-    const bankName = card.bankName || "Неизвестный банк";
-    if (!groupedCards[bankName]) {
-      groupedCards[bankName] = [];
-    }
-    groupedCards[bankName].push(card);
-  });
 
   const bankOptions = allBanks.map(bank => ({
     value: bank.id.toString(),
     label: bank.name
+  }));
+
+  const loyaltyProgramOptions = allLoyaltyPrograms.map(lp => ({
+    value: lp.id.toString(),
+    label: `${lp.bankName || "Неизвестный банк"} - ${lp.name}`
   }));
 
   return (
@@ -70,6 +76,30 @@ export default async function AdminBankCardsPage() {
             />
           </div>
           <div className={stack({ gap: "6px" })}>
+            <label className="sber-label">ПРОГРАММА ЛОЯЛЬНОСТИ</label>
+            <SearchableSelect 
+              name="loyaltyProgramId" 
+              options={[{ value: "", label: "Без программы лояльности" }, ...loyaltyProgramOptions]}
+              placeholder="Выберите программу лояльности..."
+            />
+          </div>
+          <div className={stack({ gap: "6px" })}>
+            <label className="sber-label">ТИП СЧЕТА</label>
+            <SearchableSelect 
+              name="accountType" 
+              options={[
+                { value: "debit", label: "Дебетовая карта" },
+                { value: "credit", label: "Кредитная карта" },
+                { value: "cardless", label: "Счет без карты" },
+                { value: "investments", label: "Инвестиции" },
+                { value: "bonus", label: "Бонусный счет" },
+              ]}
+              required
+              defaultValue="debit"
+              placeholder="Выберите тип счета..."
+            />
+          </div>
+          <div className={stack({ gap: "6px" })}>
             <label className="sber-label">ЛИМИТ КЕШБЭКА В МЕСЯЦ (ПО УМОЛЧАНИЮ)</label>
             <input
               name="defaultCashbackLimit"
@@ -85,42 +115,15 @@ export default async function AdminBankCardsPage() {
       </section>
 
       {/* Список типов карт */}
-      <section className={stack({ gap: "24px" })}>
+      <section className={stack({ gap: "16px" })}>
         <h3 className="sber-label">ДОСТУПНЫЕ ТИПЫ КАРТ</h3>
         
-        {Object.entries(groupedCards).map(([bankName, cards]) => (
-          <div key={bankName} className={stack({ gap: "12px" })}>
-            <h4 className={css({ fontSize: "16px", fontWeight: "600", color: "var(--foreground)", pl: "4px" })}>{bankName}</h4>
-            <div className={grid({ columns: { base: 1, sm: 2, lg: 3 }, gap: "12px" })}>
-              {cards.map(card => {
-                const bankIcon = getIconUrl({ logo: card.bankLogo, website: card.bankWebsite, name: card.bankName || "" });
-                return (
-                  <div key={card.id} className={flex({ gap: "8px", align: "stretch", opacity: card.isArchived ? 0.5 : 1 })}>
-                    <a href={`/admin/bank-cards/${card.id}`} className="sber-card" style={{ padding: '16px', display: 'flex', alignItems: 'center', gap: '16px', flex: 1 }}>
-                      <div className={css({ w: "48px", h: "48px", bg: "#f8fafc", borderRadius: "12px", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid", borderColor: "#f1f5f9", overflow: "hidden", flexShrink: 0 })}>
-                        {bankIcon ? (
-                          <img src={bankIcon} alt={card.bankName || ""} className={css({ w: "full", h: "full", objectFit: "contain", p: "4px" })} />
-                        ) : (
-                          <Landmark size={20} color="#94a3b8" />
-                        )}
-                      </div>
-                      <div className={stack({ gap: "0", flex: "1", overflow: "hidden" })}>
-                        <p className={css({ fontWeight: "700", fontSize: "15px", color: "var(--foreground)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" })} title={card.name}>{card.name}{card.isArchived && " (архив)"}</p>
-                      </div>
-                      <ChevronRight size={18} color="#C7C7CC" className={css({ flexShrink: 0 })} />
-                    </a>
-                    <ArchiveBankCardButton cardId={card.id} isArchived={!!card.isArchived} />
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-        
-        {allBankCards.length === 0 && (
+        {allBankCards.length === 0 ? (
           <div className={css({ py: "40px", textAlign: "center", color: "secondaryText", bg: "var(--card-bg)", borderRadius: "24px", border: "1px dashed", borderColor: "#e2e8f0" })}>
             Типы карт еще не созданы
           </div>
+        ) : (
+          <AdminBankCardsList cards={allBankCards} />
         )}
       </section>
     </div>

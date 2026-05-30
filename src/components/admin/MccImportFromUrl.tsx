@@ -1,26 +1,26 @@
 "use client";
 
 import { useState } from "react";
-import { fetchMccCategoriesFromUrl, importMccsToCategory, importFullCardFromUrl, MccCategoryImport } from "@/lib/actions/mcc-import";
+import { fetchMccCategoriesFromUrl, importMccsToCategory, importFullLoyaltyProgramFromUrl, MccCategoryImport } from "@/lib/actions/mcc-import";
 import { css } from "../../../styled-system/css";
 import { stack, flex } from "../../../styled-system/patterns";
 import { Globe, Loader2, CheckCircle2, ChevronDown, ChevronUp } from "lucide-react";
 
 interface MccImportProps {
   categoryId?: number;
-  bankCardId?: number;
+  loyaltyProgramId?: number;
 }
 
-export default function MccImportFromUrl({ categoryId, bankCardId }: MccImportProps) {
+export default function MccImportFromUrl({ categoryId, loyaltyProgramId }: MccImportProps) {
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [categories, setCategories] = useState<MccCategoryImport[]>([]);
   const [selectedMccs, setSelectedMccs] = useState<Set<string>>(new Set()); // Only for single category mode
-  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set()); // Only for full card mode
+  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set()); // Only for full program mode
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
 
-  const isCardMode = !!bankCardId && !categoryId;
+  const isProgramMode = !!loyaltyProgramId && !categoryId;
 
   const handleFetch = async () => {
     if (!url) return;
@@ -32,8 +32,8 @@ export default function MccImportFromUrl({ categoryId, bankCardId }: MccImportPr
       // Automatically expand first few
       setExpanded(new Set(data.slice(0, 3).map(c => c.name)));
       
-      if (isCardMode) {
-        // In card mode, select all categories by default
+      if (isProgramMode) {
+        // In program mode, select all categories by default
         setSelectedCategories(new Set(data.map(c => c.name)));
       }
     } catch (e: any) {
@@ -44,7 +44,7 @@ export default function MccImportFromUrl({ categoryId, bankCardId }: MccImportPr
   };
 
   const toggleCategorySelection = (cat: MccCategoryImport) => {
-    if (isCardMode) {
+    if (isProgramMode) {
       const newSelected = new Set(selectedCategories);
       if (newSelected.has(cat.name)) newSelected.delete(cat.name);
       else newSelected.add(cat.name);
@@ -63,7 +63,7 @@ export default function MccImportFromUrl({ categoryId, bankCardId }: MccImportPr
   };
 
   const toggleMcc = (mcc: string) => {
-    if (isCardMode) return; // MCC selection not used in card mode
+    if (isProgramMode) return; // MCC selection not used in program mode
     const newSelected = new Set(selectedMccs);
     if (newSelected.has(mcc)) newSelected.delete(mcc);
     else newSelected.add(mcc);
@@ -78,14 +78,14 @@ export default function MccImportFromUrl({ categoryId, bankCardId }: MccImportPr
   };
 
   const handleImport = async () => {
-    if (!isCardMode && selectedMccs.size === 0) return;
-    if (isCardMode && selectedCategories.size === 0) return;
+    if (!isProgramMode && selectedMccs.size === 0) return;
+    if (isProgramMode && selectedCategories.size === 0) return;
 
     setLoading(true);
     try {
-      if (isCardMode) {
+      if (isProgramMode) {
         const toImport = categories.filter(c => selectedCategories.has(c.name));
-        await importFullCardFromUrl(bankCardId!, url, toImport);
+        await importFullLoyaltyProgramFromUrl(loyaltyProgramId!, url, toImport);
         alert(`Успешно создано ${toImport.length} категорий`);
       } else {
         await importMccsToCategory(categoryId!, Array.from(selectedMccs));
@@ -106,7 +106,7 @@ export default function MccImportFromUrl({ categoryId, bankCardId }: MccImportPr
     <div style={{ display: 'block', width: '100%', marginTop: '16px' }}>
       <div style={{ marginBottom: '16px' }}>
         <label className={css({ fontSize: "10px", fontWeight: "800", color: "secondaryText", textTransform: "uppercase", display: 'block', mb: '4px' })}>
-          Импорт с mcc-codes.ru ({isCardMode ? "всю карту" : "в категорию"})
+          Импорт с mcc-codes.ru ({isProgramMode ? "всю программу" : "в категорию"})
         </label>
         <div style={{ display: 'flex', gap: '8px' }}>
           <input 
@@ -137,7 +137,7 @@ export default function MccImportFromUrl({ categoryId, bankCardId }: MccImportPr
       {categories.length > 0 && (
         <div className="sber-card" style={{ padding: '16px', display: 'block', width: '100%' }}>
           <h3 className={css({ fontSize: "14px", fontWeight: "800", mb: '12px' })}>
-            {isCardMode ? `Найдено категорий: ${categories.length}` : `Найдено MCC в ${categories.length} секциях`}
+            {isProgramMode ? `Найдено категорий: ${categories.length}` : `Найдено MCC в ${categories.length} секциях`}
           </h3>
           
           <div style={{ maxHeight: '500px', overflowY: 'auto', marginBottom: '16px', paddingRight: '4px' }}>
@@ -145,7 +145,7 @@ export default function MccImportFromUrl({ categoryId, bankCardId }: MccImportPr
               let isSelected = false;
               let isPartial = false;
 
-              if (isCardMode) {
+              if (isProgramMode) {
                 isSelected = selectedCategories.has(cat.name);
               } else {
                 isSelected = cat.mccs.every(mcc => selectedMccs.has(mcc));
@@ -167,7 +167,7 @@ export default function MccImportFromUrl({ categoryId, bankCardId }: MccImportPr
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                        <div className={css({ 
                          w: "18px", h: "18px", borderRadius: "4px", border: "2px solid", 
-                         borderColor: (isSelected || isPartial) ? "var(--sber-green)" : "var(--border-color)",
+                         borderColor: (isSelected || isPartial) ? "var(--sGreen || var(--sber-green))" : "var(--border-color)",
                          bg: isSelected ? "var(--sber-green)" : "transparent",
                          display: "flex", alignItems: "center", justifyContent: "center",
                          color: "white", flexShrink: 0
@@ -196,13 +196,13 @@ export default function MccImportFromUrl({ categoryId, bankCardId }: MccImportPr
                         {cat.mccs.map(mcc => (
                           <div 
                             key={mcc}
-                            onClick={() => !isCardMode && toggleMcc(mcc)}
+                            onClick={() => !isProgramMode && toggleMcc(mcc)}
                             style={{ 
                               padding: '4px 8px', fontSize: '11px', fontWeight: '700', borderRadius: '6px', textAlign: 'center', 
-                              cursor: isCardMode ? 'default' : 'pointer',
-                              backgroundColor: (isCardMode || selectedMccs.has(mcc)) ? 'var(--sber-green)' : 'var(--input-bg)',
-                              color: (isCardMode || selectedMccs.has(mcc)) ? 'white' : 'var(--secondary-text)',
-                              opacity: isCardMode && !isSelected ? 0.4 : 1,
+                              cursor: isProgramMode ? 'default' : 'pointer',
+                              backgroundColor: (isProgramMode || selectedMccs.has(mcc)) ? 'var(--sber-green)' : 'var(--input-bg)',
+                              color: (isProgramMode || selectedMccs.has(mcc)) ? 'white' : 'var(--secondary-text)',
+                              opacity: isProgramMode && !isSelected ? 0.4 : 1,
                               minWidth: '45px'
                             }}
                           >
@@ -219,12 +219,12 @@ export default function MccImportFromUrl({ categoryId, bankCardId }: MccImportPr
 
           <button 
             onClick={handleImport} 
-            disabled={loading || (isCardMode ? selectedCategories.size === 0 : selectedMccs.size === 0)}
+            disabled={loading || (isProgramMode ? selectedCategories.size === 0 : selectedMccs.size === 0)}
             className="sber-button"
             style={{ width: '100%' }}
           >
             {loading ? <Loader2 className={css({ animation: "spin 1s linear infinite", display: 'inline', mr: '8px' })} size={18} /> : null}
-            {isCardMode 
+            {isProgramMode 
               ? `СОЗДАТЬ ${selectedCategories.size} КАТЕГОРИЙ` 
               : `ИМПОРТИРОВАТЬ ${selectedMccs.size} MCC`
             }

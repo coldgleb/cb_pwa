@@ -2,10 +2,20 @@
 
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { mccCodes, bankCategoryMcc, bankCategories } from "@/db/schema";
+import { mccCodes, bankCategoryMcc, bankCategories, bankCards } from "@/db/schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { recalculateTransactionsForBankCard } from "./transactions";
+
+async function recalculateTransactionsForLoyaltyProgram(loyaltyProgramId: number) {
+  const cards = await db
+    .select({ id: bankCards.id })
+    .from(bankCards)
+    .where(eq(bankCards.loyaltyProgramId, loyaltyProgramId));
+  for (const card of cards) {
+    await recalculateTransactionsForBankCard(card.id);
+  }
+}
 import { createBankCategory } from "./categories";
 import { linkMultipleMccToCategory } from "./mcc";
 
@@ -192,7 +202,7 @@ export async function importMccsToCategory(categoryId: number, mccs: string[]) {
 
   if (mccs.length === 0) return;
 
-  const [cat] = await db.select({ bankCardId: bankCategories.bankCardId }).from(bankCategories).where(eq(bankCategories.id, categoryId));
+  const [cat] = await db.select({ loyaltyProgramId: bankCategories.loyaltyProgramId }).from(bankCategories).where(eq(bankCategories.id, categoryId));
   const effectiveDate = "2000-01-01";
   const yesterday = new Date(new Date(effectiveDate).getTime() - 86400000).toISOString().split('T')[0];
 
@@ -221,22 +231,22 @@ export async function importMccsToCategory(categoryId: number, mccs: string[]) {
     });
   }
 
-  if (cat) await recalculateTransactionsForBankCard(cat.bankCardId);
+  if (cat) await recalculateTransactionsForLoyaltyProgram(cat.loyaltyProgramId);
 
   revalidatePath(`/admin/categories/${categoryId}/mcc`);
 }
 
-export async function importFullCardFromUrl(bankCardId: number, url: string, selectedCategories: MccCategoryImport[]) {
+export async function importFullLoyaltyProgramFromUrl(loyaltyProgramId: number, url: string, selectedCategories: MccCategoryImport[]) {
   const session = await auth();
   if (session?.user?.role !== "admin") throw new Error("Unauthorized");
 
   const today = new Date().toISOString().split('T')[0];
 
-  // Fetch all existing categories for this card once
+  // Fetch all existing categories for this loyalty program once
   const existingCategories = await db
     .select({ id: bankCategories.id, name: bankCategories.name })
     .from(bankCategories)
-    .where(eq(bankCategories.bankCardId, bankCardId));
+    .where(eq(bankCategories.loyaltyProgramId, loyaltyProgramId));
 
   for (const cat of selectedCategories) {
     // 1. Skip categories like "1% на все покупки"
@@ -271,7 +281,7 @@ export async function importFullCardFromUrl(bankCardId: number, url: string, sel
     } else {
       // Create new category
       const formData = new FormData();
-      formData.append("bankCardId", bankCardId.toString());
+      formData.append("loyaltyProgramId", loyaltyProgramId.toString());
       formData.append("name", targetName);
       formData.append("defaultPercentage", (cat.minPercent || 1).toString());
       formData.append("startDate", today);
@@ -282,5 +292,5 @@ export async function importFullCardFromUrl(bankCardId: number, url: string, sel
     }
   }
 
-  revalidatePath(`/admin/bank-cards/${bankCardId}`);
+  revalidatePath(`/admin/loyalty-programs/${loyaltyProgramId}`);
 }

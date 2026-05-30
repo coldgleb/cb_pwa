@@ -15,7 +15,11 @@ interface DatePickerProps {
 
 export default function DatePicker({ name, defaultValue, value: controlledValue, onChange, required }: DatePickerProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [internalSelectedDate, setInternalSelectedDate] = useState(defaultValue || new Date().toISOString().split('T')[0]);
+  const [internalSelectedDate, setInternalSelectedDate] = useState(
+    (defaultValue !== undefined && defaultValue !== null)
+      ? defaultValue
+      : (required ? new Date().toISOString().split('T')[0] : "")
+  );
   
   const selectedDate = controlledValue !== undefined ? controlledValue : internalSelectedDate;
   const [viewDate, setViewDate] = useState(new Date(selectedDate || new Date()));
@@ -166,13 +170,13 @@ export default function DatePicker({ name, defaultValue, value: controlledValue,
         className={flex({ 
           align: "center", 
           gap: "10px", 
-          px: "14px", 
-          py: "12px", 
-          bg: "var(--input-bg)", 
+          px: "18px", 
+          py: "16px", 
+          bg: isOpen ? "var(--card-bg)" : "var(--input-bg)", 
           border: "1px solid", 
           borderColor: isOpen ? "var(--sber-green)" : "transparent", 
-          borderRadius: "14px", 
-          transition: "all 0.2s"
+          borderRadius: "12px", 
+          transition: "border-color 0.2s, background 0.2s"
         })}
       >
         <div onClick={() => setIsOpen(!isOpen)} className={css({ cursor: "pointer", display: "flex", alignItems: "center" })}>
@@ -188,7 +192,7 @@ export default function DatePicker({ name, defaultValue, value: controlledValue,
             bg: "transparent", 
             border: "none", 
             outline: "none", 
-            fontSize: "14px", 
+            fontSize: "17px", 
             fontWeight: "600", 
             w: "full",
             color: "var(--foreground)",

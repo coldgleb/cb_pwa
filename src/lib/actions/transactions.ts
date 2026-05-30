@@ -12,16 +12,36 @@ export async function createTransaction(formData: FormData) {
   const session = await auth();
   if (!session?.user?.id) throw new Error("Unauthorized");
 
+  const type = (formData.get("type") as string) || "expense";
   const amount = parseFloat(formData.get("amount") as string);
   const paidAmountRaw = formData.get("paidAmount") as string;
-  const paidAmount = paidAmountRaw ? parseFloat(paidAmountRaw) : amount;
-  const manualAdjustment = parseFloat(formData.get("manualAdjustment") as string) || 0;
-  const mccCode = formData.get("mccCode") as string;
-  const merchantName = formData.get("merchantName") as string;
+  const paidAmount = type === "expense" ? (paidAmountRaw ? parseFloat(paidAmountRaw) : amount) : amount;
+  const manualAdjustment = type === "expense" ? (parseFloat(formData.get("manualAdjustment") as string) || 0) : 0;
+  const mccCode = type === "expense" ? (formData.get("mccCode") as string || null) : null;
   const userCardId = parseInt(formData.get("userCardId") as string);
   const dateStr = formData.get("date") as string || new Date().toISOString().split('T')[0];
   const transactionDateIso = formData.get("transactionDateIso") as string;
   const transactionDate = transactionDateIso ? new Date(transactionDateIso) : new Date();
+
+  // For transfer operations
+  let toUserCardId: number | null = null;
+  if (type === "transfer") {
+    const toUserCardIdRaw = formData.get("toUserCardId") as string;
+    toUserCardId = toUserCardIdRaw ? parseInt(toUserCardIdRaw) : null;
+    if (!toUserCardId || isNaN(toUserCardId)) {
+      throw new Error("Выберите карту/счет получателя");
+    }
+    if (toUserCardId === userCardId) {
+      throw new Error("Карта отправителя и получателя не могут совпадать");
+    }
+  }
+
+  let finalMerchantName = formData.get("merchantName") as string || "";
+  if (type === "transfer") {
+    finalMerchantName = "Перевод";
+  } else if (type === "income" && !finalMerchantName) {
+    finalMerchantName = "Входящий перевод / Доход";
+  }
   
   // Get raw value from form to distinguish between "not provided" and "intentionally empty"
   const spendingCategoryIdRaw = formData.get("spendingCategoryId");
@@ -33,47 +53,57 @@ export async function createTransaction(formData: FormData) {
   const splits = splitsJson ? JSON.parse(splitsJson) : [];
 
   if (isNaN(amount) || amount <= 0) {
-    throw new Error("Укажите корректную сумму покупки");
-  }
-  if (!merchantName) {
-    throw new Error("Укажите название магазина");
+    throw new Error("Укажите корректную сумму");
   }
   if (isNaN(userCardId)) {
     throw new Error("Выберите банковскую карту");
   }
 
-  // Ensure merchant exists. We only update merchant's category if one was provided in the form.
-  const merchant = await ensureMerchantExists(merchantName, spendingCategoryId || undefined);
-
-  // Use the form's category if provided (even if it's null/empty), 
-  // otherwise fallback to merchant's default only if the form field wasn't present or was null.
-  // Actually, if it's explicitly "" in formData, we should use NULL and NOT fallback.
   let finalSpendingCategoryId = spendingCategoryId;
-  if (spendingCategoryIdRaw === null && merchant?.spendingCategoryId) {
-    finalSpendingCategoryId = merchant.spendingCategoryId;
-  } else if (spendingCategoryIdRaw === "" ) {
-    finalSpendingCategoryId = null;
-  } else if (spendingCategoryId === null && merchant?.spendingCategoryId) {
-     // This case covers when it wasn't in form or was null but merchant has one
-     finalSpendingCategoryId = merchant.spendingCategoryId;
+  let finalMerchant = null;
+
+  if (type === "expense") {
+    // Ensure merchant exists. We only update merchant's category if one was provided in the form.
+    finalMerchant = await ensureMerchantExists(finalMerchantName, spendingCategoryId || undefined);
+
+    // Use the form's category if provided (even if it's null/empty), 
+    // otherwise fallback to merchant's default only if the form field wasn't present or was null.
+    if (spendingCategoryIdRaw === null && finalMerchant?.spendingCategoryId) {
+      finalSpendingCategoryId = finalMerchant.spendingCategoryId;
+    } else if (spendingCategoryIdRaw === "" ) {
+      finalSpendingCategoryId = null;
+    } else if (spendingCategoryId === null && finalMerchant?.spendingCategoryId) {
+      // This case covers when it wasn't in form or was null but merchant has one
+      finalSpendingCategoryId = finalMerchant.spendingCategoryId;
+    }
   }
 
+  let cashback = 0;
+  let categoryId = null;
+  let nominalPercentage = 0;
 
-  const { cashback, categoryId, nominalPercentage } = await calculateCashbackForTransaction(
-    paidAmount,
-    mccCode,
-    merchantName,
-    userCardId,
-    dateStr
-  );
+  if (type === "expense") {
+    const calcResult = await calculateCashbackForTransaction(
+      paidAmount,
+      mccCode || "",
+      finalMerchantName,
+      userCardId,
+      dateStr
+    );
+    cashback = calcResult.cashback;
+    categoryId = calcResult.categoryId;
+    nominalPercentage = calcResult.nominalPercentage || 0;
+  }
 
   const [newTx] = await db.insert(transactions).values({
     userId: session.user.id,
     userCardId,
+    toUserCardId,
+    type,
     amount,
     paidAmount,
     transactionDate,
-    merchantName,
+    merchantName: finalMerchantName,
     mccCode,
     calculatedCashback: cashback,
     cashbackPercentage: nominalPercentage,
@@ -82,7 +112,7 @@ export async function createTransaction(formData: FormData) {
     spendingCategoryId: finalSpendingCategoryId,
   }).returning();
 
-  if (splits.length > 0) {
+  if (type === "expense" && splits.length > 0) {
     await db.insert(transactionCategorySplits).values(
       splits.map((s: any) => ({
         transactionId: newTx.id,
@@ -100,17 +130,37 @@ export async function updateTransaction(id: number, formData: FormData) {
   const session = await auth();
   if (!session?.user?.id) throw new Error("Unauthorized");
 
+  const type = (formData.get("type") as string) || "expense";
   const amount = parseFloat(formData.get("amount") as string);
   const paidAmountRaw = formData.get("paidAmount") as string;
-  const paidAmount = paidAmountRaw ? parseFloat(paidAmountRaw) : amount;
-  const manualAdjustment = parseFloat(formData.get("manualAdjustment") as string) || 0;
-  const mccCode = formData.get("mccCode") as string;
-  const merchantName = formData.get("merchantName") as string;
+  const paidAmount = type === "expense" ? (paidAmountRaw ? parseFloat(paidAmountRaw) : amount) : amount;
+  const manualAdjustment = type === "expense" ? (parseFloat(formData.get("manualAdjustment") as string) || 0) : 0;
+  const mccCode = type === "expense" ? (formData.get("mccCode") as string || null) : null;
   const userCardId = parseInt(formData.get("userCardId") as string);
   const dateStr = formData.get("date") as string || new Date().toISOString().split('T')[0];
   const transactionDateIso = formData.get("transactionDateIso") as string;
   const transactionDate = transactionDateIso ? new Date(transactionDateIso) : new Date();
   
+  // For transfer operations
+  let toUserCardId: number | null = null;
+  if (type === "transfer") {
+    const toUserCardIdRaw = formData.get("toUserCardId") as string;
+    toUserCardId = toUserCardIdRaw ? parseInt(toUserCardIdRaw) : null;
+    if (!toUserCardId || isNaN(toUserCardId)) {
+      throw new Error("Выберите карту/счет получателя");
+    }
+    if (toUserCardId === userCardId) {
+      throw new Error("Карта отправителя и получателя не могут совпадать");
+    }
+  }
+
+  let finalMerchantName = formData.get("merchantName") as string || "";
+  if (type === "transfer") {
+    finalMerchantName = "Перевод";
+  } else if (type === "income" && !finalMerchantName) {
+    finalMerchantName = "Входящий перевод / Доход";
+  }
+
   // Get raw value from form to distinguish between "not provided" and "intentionally empty"
   const spendingCategoryIdRaw = formData.get("spendingCategoryId");
   const spendingCategoryId = (spendingCategoryIdRaw !== null && spendingCategoryIdRaw !== "") 
@@ -120,35 +170,57 @@ export async function updateTransaction(id: number, formData: FormData) {
   const splitsJson = formData.get("splits") as string;
   const splits = splitsJson ? JSON.parse(splitsJson) : [];
 
-  // Ensure merchant exists
-  const merchant = await ensureMerchantExists(merchantName, spendingCategoryId || undefined);
-
-  // Intentional NULL handling
-  let finalSpendingCategoryId = spendingCategoryId;
-  if (spendingCategoryIdRaw === null && merchant?.spendingCategoryId) {
-    finalSpendingCategoryId = merchant.spendingCategoryId;
-  } else if (spendingCategoryIdRaw === "" ) {
-    finalSpendingCategoryId = null;
-  } else if (spendingCategoryId === null && merchant?.spendingCategoryId) {
-     finalSpendingCategoryId = merchant.spendingCategoryId;
+  if (isNaN(amount) || amount <= 0) {
+    throw new Error("Укажите корректную сумму");
+  }
+  if (isNaN(userCardId)) {
+    throw new Error("Выберите банковскую карту");
   }
 
-  const { cashback, categoryId, nominalPercentage } = await calculateCashbackForTransaction(
-    paidAmount,
-    mccCode,
-    merchantName,
-    userCardId,
-    dateStr,
-    id
-  );
+  let finalSpendingCategoryId = spendingCategoryId;
+  let finalMerchant = null;
+
+  if (type === "expense") {
+    // Ensure merchant exists
+    finalMerchant = await ensureMerchantExists(finalMerchantName, spendingCategoryId || undefined);
+
+    // Intentional NULL handling
+    if (spendingCategoryIdRaw === null && finalMerchant?.spendingCategoryId) {
+      finalSpendingCategoryId = finalMerchant.spendingCategoryId;
+    } else if (spendingCategoryIdRaw === "" ) {
+      finalSpendingCategoryId = null;
+    } else if (spendingCategoryId === null && finalMerchant?.spendingCategoryId) {
+       finalSpendingCategoryId = finalMerchant.spendingCategoryId;
+    }
+  }
+
+  let cashback = 0;
+  let categoryId = null;
+  let nominalPercentage = 0;
+
+  if (type === "expense") {
+    const calcResult = await calculateCashbackForTransaction(
+      paidAmount,
+      mccCode || "",
+      finalMerchantName,
+      userCardId,
+      dateStr,
+      id
+    );
+    cashback = calcResult.cashback;
+    categoryId = calcResult.categoryId;
+    nominalPercentage = calcResult.nominalPercentage || 0;
+  }
 
   await db.update(transactions)
     .set({
       userCardId,
+      toUserCardId,
+      type,
       amount,
       paidAmount,
       transactionDate,
-      merchantName,
+      merchantName: finalMerchantName,
       mccCode,
       calculatedCashback: cashback,
       cashbackPercentage: nominalPercentage,
@@ -160,7 +232,7 @@ export async function updateTransaction(id: number, formData: FormData) {
 
   // Update splits
   await db.delete(transactionCategorySplits).where(eq(transactionCategorySplits.transactionId, id));
-  if (splits.length > 0) {
+  if (type === "expense" && splits.length > 0) {
     await db.insert(transactionCategorySplits).values(
       splits.map((s: any) => ({
         transactionId: id,

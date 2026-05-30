@@ -17,6 +17,10 @@ export async function registerUser(formData: FormData) {
     throw new Error("Missing email or password");
   }
 
+  if (email.toLowerCase().trim() !== "saygingleb101@gmail.com") {
+    throw new Error("Регистрация новых пользователей отключена. Это персональное приложение.");
+  }
+
   // Check if user exists first to provide a clear error
   const [existingUser] = await db.select().from(users).where(eq(users.email, email)).limit(1);
   if (existingUser) {

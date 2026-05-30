@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { ReactNode } from "react";
 import { css } from "../../../../styled-system/css";
 import { flex, container, stack } from "../../../../styled-system/patterns";
-import { Landmark, CreditCard, Hash, LayoutDashboard, Store, RefreshCw, Tag } from "lucide-react";
+import { Landmark, CreditCard, Hash, LayoutDashboard, Store, RefreshCw, Tag, Award } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +16,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
 
   const navItems = [
     { label: "Банки", href: "/admin/banks", icon: Landmark },
+    { label: "Программы лояльности", href: "/admin/loyalty-programs", icon: Award },
     { label: "Карты", href: "/admin/bank-cards", icon: CreditCard },
     { label: "МСС", href: "/admin/mcc", icon: Hash },
     { label: "Мерчанты", href: "/admin/merchants", icon: Store },
@@ -32,10 +33,10 @@ export default async function AdminLayout({ children }: { children: ReactNode })
           <div className={container({ maxWidth: { base: "512px", lg: "100%" }, px: { base: "20px", lg: "40px" } })}>
             <div className={flex({ align: "center", justify: "space-between" })}>
               <div className={flex({ align: "center", gap: "10px" })}>
-                <div className={css({ w: "32px", h: "32px", bg: "var(--foreground)", borderRadius: "10px", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--card-bg)", fontSize: "10px", fontWeight: "bold" })}>
-                  AD
+                <div className={css({ w: "32px", h: "32px", bg: "var(--foreground)", borderRadius: "10px", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--card-bg)", fontSize: "16px", fontWeight: "bold" })}>
+                  ⚙️
                 </div>
-                <span className={css({ fontSize: "15px", fontWeight: "800", color: "var(--foreground)" })}>Админка</span>
+                <span className={css({ fontSize: "15px", fontWeight: "800", color: "var(--foreground)" })}>Управление справочниками</span>
               </div>
               <a href="/" className={css({ p: "8px", color: "var(--sber-green)" })}>
                 <LayoutDashboard size={20} />

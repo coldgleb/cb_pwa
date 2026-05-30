@@ -95,14 +95,14 @@ export default function SearchableSelect({
         className={flex({ 
           align: "center", 
           gap: "10px", 
-          px: "14px", 
-          py: "12px", 
-          bg: disabled ? "var(--surface-secondary)" : "var(--input-bg)", 
+          px: "18px", 
+          py: "16px", 
+          bg: isOpen ? "var(--card-bg)" : (disabled ? "var(--surface-secondary)" : "var(--input-bg)"), 
           border: "1px solid", 
-          borderColor: isOpen ? "var(--sber-green)" : "var(--border-color)", 
-          borderRadius: "14px", 
+          borderColor: isOpen ? "var(--sber-green)" : "transparent", 
+          borderRadius: "12px", 
           cursor: disabled ? "not-allowed" : "pointer",
-          transition: "all 0.2s",
+          transition: "border-color 0.2s, background 0.2s",
           WebkitTapHighlightColor: "transparent",
           _active: { bg: disabled ? "var(--surface-secondary)" : "var(--surface-secondary)" },
           w: "full",
@@ -111,11 +111,11 @@ export default function SearchableSelect({
       >
         <div className={css({ flex: 1, overflow: "hidden", minW: 0 })}>
           {currentSelection ? (
-            <p className={css({ fontSize: "14px", fontWeight: "600", color: disabled ? "var(--secondary-text)" : "var(--foreground)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" })}>
+            <p className={css({ fontSize: "17px", fontWeight: "600", color: disabled ? "var(--secondary-text)" : "var(--foreground)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" })}>
               {currentSelection.label}
             </p>
           ) : (
-            <p className={css({ fontSize: "14px", color: "var(--secondary-text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" })}>{placeholder}</p>
+            <p className={css({ fontSize: "17px", color: "var(--secondary-text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" })}>{placeholder}</p>
           )}
         </div>
         {!disabled && <ChevronDown size={18} className={css({ color: "var(--secondary-text)", transform: isOpen ? "rotate(180deg)" : "none", transition: "transform 0.2s" })} />}
@@ -129,7 +129,9 @@ export default function SearchableSelect({
           top: { base: "auto", md: "calc(100% + 4px)" },
           left: 0, 
           right: { base: 0, md: "auto" }, 
-          minW: { md: "320px" },
+          w: { base: "full", md: "max-content" },
+          minW: "100%",
+          maxW: { md: "450px" },
           bg: "var(--card-bg)", 
           borderRadius: { base: "24px 24px 0 0", md: "18px" },
           shadow: "0 -10px 25px rgba(0, 0, 0, 0.2), 0 10px 25px -5px rgba(0, 0, 0, 0.2)", 
