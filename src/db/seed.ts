@@ -1,8 +1,19 @@
 import { db } from "./index";
-import { banks, mccCodes } from "./schema";
+import { banks, mccCodes, users } from "./schema";
+import bcrypt from "bcryptjs";
 
 async function main() {
   console.log("Seeding database...");
+
+  // Create admin user
+  const hashedPassword = await bcrypt.hash("admin123", 10);
+  await db.insert(users).values({
+    id: "baaa1eea-9680-46dd-9178-eebe2406cbe0",
+    name: "Admin",
+    email: "saygingleb101@gmail.com",
+    password: hashedPassword,
+    role: "admin",
+  }).onConflictDoNothing();
 
   const popularBanks = [
     { name: "Т-Банк (Тинькофф)", logo: "https://acdn.tinkoff.ru/static/documents/09695663-0a7c-47b7-872e-36067b57b3f9.png", website: "tbank.ru" },

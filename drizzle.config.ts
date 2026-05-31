@@ -2,7 +2,7 @@ import { defineConfig } from "drizzle-kit";
 import * as dotenv from "dotenv";
 
 // Next.js обычно использует .env.local, подгружаем его тоже
-dotenv.config({ path: ".env.local" });
+dotenv.config({ path: ".env" });
 dotenv.config();
 
 if (!process.env.DATABASE_URL) {

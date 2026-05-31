@@ -53,5 +53,15 @@ export async function updateBank(id: number, formData: FormData) {
   redirect("/admin/banks");
 }
 
+export async function deleteBank(id: number) {
+  const session = await auth();
+  if (session?.user?.role !== "admin") throw new Error("Unauthorized");
+
+  await db.delete(banks).where(eq(banks.id, id));
+
+  revalidatePath("/admin/banks");
+  redirect("/admin/banks");
+}
+
 import { eq } from "drizzle-orm";
 
