@@ -50,7 +50,6 @@ export default function AddMerchantForm({ mccOptions, categoryOptions }: AddMerc
         action={async (formData) => {
             await createMerchant(formData);
             setOverrides(null);
-            (document.getElementById("add-merch-form") as HTMLFormElement)?.reset();
         }} 
         successMessage="Мерчант успешно добавлен" 
         className={stack({ gap: "20px" })}
@@ -71,7 +70,7 @@ export default function AddMerchantForm({ mccOptions, categoryOptions }: AddMerc
               type="button"
               onClick={handleAutoSearch}
               disabled={isSearching}
-              className={css({ p: "12px", bg: "var(--card-bg)", borderRadius: "14px", border: "1px solid var(--border-color)", color: "var(--secondary-text)", cursor: "pointer", _hover: { color: "sberGreen", borderColor: "sberGreen" }, disabled: { opacity: 0.5 } })}
+              className={css({ p: "12px", bg: "var(--card-bg)", borderRadius: "14px", border: "1px solid var(--border-color)", color: "var(--secondary-text)", cursor: "pointer", _hover: { color: "sberGreen", borderColor: "sberGreen" }, _disabled: { opacity: 0.5 } })}
               title="Автопоиск MCC"
             >
               {isSearching ? <Loader2 size={18} className={css({ animation: "spin 1s linear infinite" })} /> : <Search size={18} />}

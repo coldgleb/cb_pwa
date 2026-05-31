@@ -8,6 +8,7 @@ interface MerchantFormWrapperProps {
   successMessage: string;
   children: React.ReactNode;
   className?: string;
+  id?: string;
   onSuccess?: () => void;
 }
 
@@ -16,6 +17,7 @@ export default function MerchantFormWrapper({
   successMessage, 
   children, 
   className,
+  id,
   onSuccess 
 }: MerchantFormWrapperProps) {
   const { toast } = useToast();
@@ -39,7 +41,7 @@ export default function MerchantFormWrapper({
   };
 
   return (
-    <form ref={formRef} action={handleSubmit} className={className}>
+    <form id={id} ref={formRef} action={handleSubmit} className={className}>
       {children}
     </form>
   );

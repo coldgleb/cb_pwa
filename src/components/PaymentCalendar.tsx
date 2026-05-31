@@ -33,6 +33,7 @@ interface PaymentCalendarProps {
 export default function PaymentCalendar({ payments, creditCards }: PaymentCalendarProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [showAddForm, setShowAddForm] = useState(false);
+  const [newPaymentType, setNewPaymentType] = useState<"minimal" | "full">("minimal");
   const { toast } = useToast();
 
   const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
@@ -59,7 +60,7 @@ export default function PaymentCalendar({ payments, creditCards }: PaymentCalend
 
   return (
     <section className={stack({ gap: "16px" })}>
-      <div className={flex({ justify: "space-between", align: "center", px: "4px" })}>
+      <div className={flex({ justify: "space-between", alignItems: "center", px: "4px" })}>
         <h2 className={css({ fontSize: "18px", fontWeight: "800", color: "var(--foreground)" })}>Календарь платежей</h2>
         <button 
           onClick={() => setShowAddForm(true)}
@@ -71,7 +72,7 @@ export default function PaymentCalendar({ payments, creditCards }: PaymentCalend
 
       <div className="sber-card" style={{ padding: "16px" }}>
         {/* Calendar Header */}
-        <div className={flex({ justify: "space-between", align: "center", mb: "20px" })}>
+        <div className={flex({ justify: "space-between", alignItems: "center", mb: "20px" })}>
           <div className={stack({ gap: "2px" })}>
             <p className={css({ fontSize: "15px", fontWeight: "800" })}>{monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}</p>
             <p className={css({ fontSize: "12px", color: "var(--secondary-text)", fontWeight: "600" })}>Осталось оплатить: {totalToPay.toLocaleString("ru-RU")} ₽</p>
@@ -167,8 +168,8 @@ export default function PaymentCalendar({ payments, creditCards }: PaymentCalend
               const typeLabel = p.paymentType === "full" ? "Полное погашение" : "Минимальный платеж";
               
               return (
-                <div key={p.id} className={flex({ justify: "space-between", align: "center", p: "10px", bg: "var(--surface-secondary)", borderRadius: "12px", border: "1px solid var(--border-color)" })}>
-                  <div className={flex({ align: "center", gap: "10px" })}>
+                <div key={p.id} className={flex({ justify: "space-between", alignItems: "center", p: "10px", bg: "var(--surface-secondary)", borderRadius: "12px", border: "1px solid var(--border-color)" })}>
+                  <div className={flex({ alignItems: "center", gap: "10px" })}>
                     <button 
                        onClick={() => toggleCreditPaymentStatus(p.id, !p.isPaid)}
                        className={css({ 
@@ -237,12 +238,46 @@ export default function PaymentCalendar({ payments, creditCards }: PaymentCalend
               <div className={stack({ gap: "6px" })}>
                 <label className="sber-label">ТИП ПЛАТЕЖА</label>
                 <div className={css({ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" })}>
-                   <label className={flex({ align: "center", gap: "8px", p: "10px", borderRadius: "12px", border: "1px solid var(--border-color)", cursor: "pointer", bg: "var(--surface-secondary)", _has: { "&:checked": { borderColor: "#f97316", bg: "rgba(249, 115, 22, 0.05)" } } })}>
-                      <input type="radio" name="paymentType" value="minimal" defaultChecked className={css({ accentColor: "#f97316" })} />
+                   <label className={css({ 
+                     display: "flex", 
+                     alignItems: "center", 
+                     gap: "8px", 
+                     p: "10px", 
+                     borderRadius: "12px", 
+                     border: "1px solid",
+                     borderColor: newPaymentType === "minimal" ? "#f97316" : "var(--border-color)", 
+                     cursor: "pointer", 
+                     bg: newPaymentType === "minimal" ? "rgba(249, 115, 22, 0.05)" : "var(--surface-secondary)"
+                   })}>
+                      <input 
+                        type="radio" 
+                        name="paymentType" 
+                        value="minimal" 
+                        checked={newPaymentType === "minimal"} 
+                        onChange={() => setNewPaymentType("minimal")}
+                        className={css({ accentColor: "#f97316" })} 
+                      />
                       <span className={css({ fontSize: "12px", fontWeight: "700", color: "#f97316" })}>Минимальный</span>
                    </label>
-                   <label className={flex({ align: "center", gap: "8px", p: "10px", borderRadius: "12px", border: "1px solid var(--border-color)", cursor: "pointer", bg: "var(--surface-secondary)", _has: { "&:checked": { borderColor: "#ef4444", bg: "rgba(239, 68, 68, 0.05)" } } })}>
-                      <input type="radio" name="paymentType" value="full" className={css({ accentColor: "#ef4444" })} />
+                   <label className={css({ 
+                     display: "flex", 
+                     alignItems: "center", 
+                     gap: "8px", 
+                     p: "10px", 
+                     borderRadius: "12px", 
+                     border: "1px solid",
+                     borderColor: newPaymentType === "full" ? "#ef4444" : "var(--border-color)", 
+                     cursor: "pointer", 
+                     bg: newPaymentType === "full" ? "rgba(239, 68, 68, 0.05)" : "var(--surface-secondary)"
+                   })}>
+                      <input 
+                        type="radio" 
+                        name="paymentType" 
+                        value="full" 
+                        checked={newPaymentType === "full"} 
+                        onChange={() => setNewPaymentType("full")}
+                        className={css({ accentColor: "#ef4444" })} 
+                      />
                       <span className={css({ fontSize: "12px", fontWeight: "700", color: "#ef4444" })}>Полное</span>
                    </label>
                 </div>
@@ -260,7 +295,7 @@ export default function PaymentCalendar({ payments, creditCards }: PaymentCalend
                 <label className="sber-label">ЗАМЕТКА</label>
                 <input name="note" type="text" placeholder="Минимальный платеж..." className="sber-input" />
               </div>
-              <button type="submit" className="sber-button" style={{ mt: "8px" }}>Сохранить платеж</button>
+              <button type="submit" className="sber-button" style={{ marginTop: "8px" }}>Сохранить платеж</button>
             </form>
           </div>
         </div>

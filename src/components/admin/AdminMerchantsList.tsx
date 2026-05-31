@@ -222,7 +222,7 @@ export default function AdminMerchantsList({
                               handleAutoSearch(merchant.id, nameInput?.value || merchant.name);
                             }}
                             disabled={isSearching === merchant.id}
-                            className={css({ p: "4px", color: "var(--secondary-text)", cursor: "pointer", _hover: { color: "sberGreen" }, disabled: { opacity: 0.5 } })}
+                            className={css({ p: "4px", color: "var(--secondary-text)", cursor: "pointer", _hover: { color: "sberGreen" }, _disabled: { opacity: 0.5 } })}
                             title="Автопоиск MCC"
                           >
                             {isSearching === merchant.id ? <Loader2 size={16} className={css({ animation: "spin 1s linear infinite" })} /> : <Search size={16} />}
@@ -365,7 +365,7 @@ export default function AdminMerchantsList({
                       handleAutoSearch(editingMerchant.id, nameInput?.value || editingMerchant.name);
                     }}
                     disabled={isSearching === editingMerchant.id}
-                    className={css({ p: "12px", bg: "var(--card-bg)", borderRadius: "14px", border: "1px solid var(--border-color)", color: "var(--secondary-text)", cursor: "pointer", _hover: { color: "sberGreen", borderColor: "sberGreen" }, disabled: { opacity: 0.5 } })}
+                    className={css({ p: "12px", bg: "var(--card-bg)", borderRadius: "14px", border: "1px solid var(--border-color)", color: "var(--secondary-text)", cursor: "pointer", _hover: { color: "sberGreen", borderColor: "sberGreen" }, _disabled: { opacity: 0.5 } })}
                   >
                     {isSearching === editingMerchant.id ? <Loader2 size={18} className={css({ animation: "spin 1s linear infinite" })} /> : <Search size={18} />}
                   </button>

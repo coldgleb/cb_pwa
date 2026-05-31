@@ -257,7 +257,7 @@ export async function bulkRecalculateTransactions(
 
           // F. Rounding
           const histSetting = allHistoricalSettings.find(s => s.startDate <= txDateStr);
-          const cardRounding = histSetting?.roundingType || cardInfo.baseRounding || "no_rounding";
+          const cardRounding = histSetting?.roundingType || "no_rounding";
           const programRounding = (cardInfo.programRounding && cardInfo.programRounding !== "no_rounding") 
             ? cardInfo.programRounding 
             : cardRounding;
