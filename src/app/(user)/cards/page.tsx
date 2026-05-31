@@ -5,8 +5,8 @@ import { css } from "../../../../styled-system/css";
 import { stack, flex } from "../../../../styled-system/patterns";
 import { eq, asc, and, sql, gte, lte } from "drizzle-orm";
 import { redirect } from "next/navigation";
-import { ArrowLeft, Plus, Check } from "lucide-react";
-import AddUserCardForm from "@/components/AddUserCardForm";
+import { ArrowLeft, Check } from "lucide-react";
+import AddCardModalWrapper from "@/components/AddCardModalWrapper";
 import UserCardsList from "@/components/UserCardsList";
 import { getIconUrl } from "@/lib/utils/icons";
 
@@ -154,26 +154,17 @@ export default async function UserCardsPage() {
         py: "32px",
         pb: "calc(80px + env(safe-area-inset-bottom))"
       })}>
-        <header className={stack({ gap: "4px", mb: "32px" })}>
-          <a href="/" className="sber-icon-button">
-            <ArrowLeft size={20} />
-          </a>
-          <h1 className={css({ fontSize: "24px", fontWeight: "800", color: "var(--foreground)" })}>Мои карты</h1>
+        <header className={flex({ justify: "space-between", align: "center", mb: "32px" })}>
+          <div className={flex({ align: "center", gap: "12px" })}>
+            <a href="/" className="sber-icon-button">
+              <ArrowLeft size={20} />
+            </a>
+            <h1 className={css({ fontSize: "24px", fontWeight: "800", color: "var(--foreground)" })}>Мои карты</h1>
+          </div>
+          <AddCardModalWrapper banks={allBanks} cardTypes={availableCardTypes} />
         </header>
 
         <div className={stack({ gap: "40px" })}>
-          {/* Форма добавления */}
-          <section className="sber-card">
-            <div className={flex({ align: "center", gap: "10px", mb: "24px" })}>
-              <div className={css({ p: "6px", bg: "sberGreen", borderRadius: "8px", color: "white" })}>
-                <Plus size={18} />
-              </div>
-              <h2 className={css({ fontSize: "17px", fontWeight: "700", color: "var(--foreground)" })}>Добавить карту</h2>
-            </div>
-            
-            <AddUserCardForm banks={allBanks} cardTypes={availableCardTypes} />
-          </section>
-
           {/* Список программ лояльности */}
           {myLoyaltyPrograms.length > 0 && (
             <section className={stack({ gap: "16px" })}>
@@ -221,4 +212,3 @@ export default async function UserCardsPage() {
     </div>
   );
 }
-

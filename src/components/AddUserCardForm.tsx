@@ -25,9 +25,10 @@ interface CardType {
 interface AddUserCardFormProps {
   banks: Bank[];
   cardTypes: CardType[];
+  onSuccess?: () => void;
 }
 
-export default function AddUserCardForm({ banks, cardTypes }: AddUserCardFormProps) {
+export default function AddUserCardForm({ banks, cardTypes, onSuccess }: AddUserCardFormProps) {
   const [selectedBankId, setSelectedBankId] = useState<string>("");
   const [selectedCardId, setSelectedCardId] = useState<string>("");
   const [isPending, startTransition] = useTransition();
@@ -63,6 +64,7 @@ export default function AddUserCardForm({ banks, cardTypes }: AddUserCardFormPro
       try {
         await addUserCard(formData);
         toast("Карта успешно добавлена", "success");
+        if (onSuccess) onSuccess();
         router.push("/cards");
       } catch (error) {
         toast(error instanceof Error ? error.message : "Ошибка при добавлении карты", "error");

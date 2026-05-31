@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/db";
-import { bankCards, bankCardSettings, bankCategories, userCards } from "@/db/schema";
+import { bankCards, bankCategories, userCards } from "@/db/schema";
 import { auth } from "@/auth";
 import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
@@ -84,7 +84,6 @@ export async function deleteBankCard(id: number) {
   const session = await auth();
   if (session?.user?.role !== "admin") throw new Error("Unauthorized");
 
-  await db.delete(bankCardSettings).where(eq(bankCardSettings.bankCardId, id));
   await db.delete(bankCards).where(eq(bankCards.id, id));
 
   revalidatePath("/admin/bank-cards");

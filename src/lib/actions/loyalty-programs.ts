@@ -86,34 +86,17 @@ export async function deleteLoyaltyProgram(id: number) {
   if (session?.user?.role !== "admin") throw new Error("Unauthorized");
 
   // Note: Before deleting a loyalty program, we should unbind any cards or categories.
-  // In SQLite/Drizzle, since we don't have cascade delete set up explicitly for every table,
-  // we should clean up related categories.
   
-  // Find categories under this loyalty program and delete their MCC/merchant bindings
+  // Find categories under this loyalty program 
   const categories = await db
     .select({ id: bankCategories.id })
     .from(bankCategories)
     .where(eq(bankCategories.loyaltyProgramId, id));
 
-  for (const category of categories) {
-    // Delete bindings or use delete action if available
-    // But since it's admin delete, let's clean up manually.
-    // We can also let the cascade or simple delete handle it, but database might fail on FK violations.
-    // Let's first nullify bankCards references or keep it clean
-  }
-
   // Update cards using this loyalty program to NULL
   await db.update(bankCards)
     .set({ loyaltyProgramId: null })
     .where(eq(bankCards.loyaltyProgramId, id));
-
-  // Delete categories (and their mcc/merchant bindings if not cascade, but we can delete them explicitly)
-  // To keep it simple, we delete the categories:
-  for (const category of categories) {
-    // We can delete bankCategoryMcc and bankCategoryMerchant for the category id
-    // (though in SQLite with references it might block or cascade depending on DB settings, let's clean it up to be safe)
-    // Wait, let's check if schemas have onDelete: "cascade" in schema.ts
-  }
 
   // Delete categories
   await db.delete(bankCategories).where(eq(bankCategories.loyaltyProgramId, id));

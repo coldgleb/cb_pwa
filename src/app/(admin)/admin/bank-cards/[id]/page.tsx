@@ -1,7 +1,6 @@
 import { db } from "@/db";
-import { banks, bankCards, bankCardSettings, loyaltyPrograms } from "@/db/schema";
+import { banks, bankCards, loyaltyPrograms } from "@/db/schema";
 import { updateBankCard } from "@/lib/actions/bank-cards";
-import { addBankCardSetting, deleteBankCardSetting } from "@/lib/actions/bank-card-settings";
 import { css } from "../../../../../../styled-system/css";
 import { stack, flex, grid } from "../../../../../../styled-system/patterns";
 import { eq, desc, asc } from "drizzle-orm";
