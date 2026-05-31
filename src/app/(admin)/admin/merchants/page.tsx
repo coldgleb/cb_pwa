@@ -11,6 +11,8 @@ import FindWebsiteButtonWrapper from "@/components/admin/FindWebsiteButtonWrappe
 import MerchantFormWrapper from "@/components/admin/MerchantFormWrapper";
 import AdminMerchantsList from "@/components/admin/AdminMerchantsList";
 
+export const dynamic = "force-dynamic";
+
 export default async function MerchantsPage() {
   const allMerchants = await db.select().from(merchants).orderBy(asc(merchants.name));
   const allMccs = await db.select({ code: mccCodes.code, name: mccCodes.description }).from(mccCodes).orderBy(asc(mccCodes.code));

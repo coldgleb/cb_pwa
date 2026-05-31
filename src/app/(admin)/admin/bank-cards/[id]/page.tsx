@@ -11,6 +11,8 @@ import SearchableSelect from "@/components/SearchableSelect";
 import RecalculateCardTransactionsButton from "@/components/admin/RecalculateCardTransactionsButton";
 import DatePicker from "@/components/DatePicker";
 
+export const dynamic = "force-dynamic";
+
 export default async function EditBankCardPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const cardId = parseInt(id);

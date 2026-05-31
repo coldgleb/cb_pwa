@@ -7,6 +7,8 @@ import { Plus } from "lucide-react";
 import FindWebsiteButtonWrapper from "@/components/admin/FindWebsiteButtonWrapper";
 import AdminBanksList from "@/components/admin/AdminBanksList";
 
+export const dynamic = "force-dynamic";
+
 export default async function BanksPage() {
   const allBanks = await db.select().from(banks);
 

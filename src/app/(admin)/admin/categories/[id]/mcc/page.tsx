@@ -10,6 +10,8 @@ import SearchableSelect from "@/components/SearchableSelect";
 import CopyMccsButton from "@/components/admin/CopyMccsButton";
 import MccImportFromUrl from "@/components/admin/MccImportFromUrl";
 
+export const dynamic = "force-dynamic";
+
 export default async function CategoryCompositionPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const categoryId = parseInt(id);

@@ -8,6 +8,8 @@ import { Plus, Landmark } from "lucide-react";
 import SearchableSelect from "@/components/SearchableSelect";
 import AdminBankCardsList from "@/components/admin/AdminBankCardsList";
 
+export const dynamic = "force-dynamic";
+
 export default async function AdminBankCardsPage() {
   const allBanks = await db.select().from(banks).orderBy(asc(banks.name));
   const allLoyaltyPrograms = await db.select({

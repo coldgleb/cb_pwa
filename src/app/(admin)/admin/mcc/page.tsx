@@ -7,6 +7,8 @@ import { Plus, Tag, RefreshCw } from "lucide-react";
 import { asc } from "drizzle-orm";
 import AdminMccList from "@/components/admin/AdminMccList";
 
+export const dynamic = "force-dynamic";
+
 export default async function MccPage() {
   const allMcc = await db.select().from(mccCodes).orderBy(asc(mccCodes.code));
 
