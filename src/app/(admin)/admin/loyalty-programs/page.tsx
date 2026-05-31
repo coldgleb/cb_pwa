@@ -3,7 +3,7 @@ import { banks, loyaltyPrograms } from "@/db/schema";
 import { createLoyaltyProgram } from "@/lib/actions/loyalty-programs";
 import { css } from "../../../../../styled-system/css";
 import { stack, flex } from "../../../../../styled-system/patterns";
-import { eq, asc } from "drizzle-orm";
+import { eq, asc, sql } from "drizzle-orm";
 import { Plus } from "lucide-react";
 import SearchableSelect from "@/components/SearchableSelect";
 import AdminLoyaltyProgramsList from "@/components/admin/AdminLoyaltyProgramsList";
@@ -86,11 +86,20 @@ export default async function LoyaltyProgramsPage() {
     );
   } catch (error: any) {
     console.error("Error loading LoyaltyProgramsPage:", error);
+    let dbSchemaInfo = "";
+    try {
+      const result = await db.$client.execute("SELECT name, sql FROM sqlite_master WHERE type='table'");
+      dbSchemaInfo = JSON.stringify(result.rows, null, 2);
+    } catch (schemaErr: any) {
+      dbSchemaInfo = "Failed to fetch schema: " + (schemaErr.message || String(schemaErr));
+    }
     return (
       <div style={{ padding: "24px", color: "#b91c1c", background: "#fef2f2", border: "1px solid #fee2e2", borderRadius: "16px", margin: "20px 0", fontFamily: "monospace" }}>
         <h2 style={{ fontSize: "18px", fontWeight: "bold", marginBottom: "12px" }}>Ошибка сервера (500) при загрузке программ лояльности:</h2>
         <p style={{ fontSize: "14px", marginBottom: "8px", fontWeight: "bold" }}>{error?.message || String(error)}</p>
         {error?.stack && <pre style={{ fontSize: "12px", whiteSpace: "pre-wrap", background: "#fca5a5", padding: "12px", borderRadius: "8px", color: "#7f1d1d" }}>{error.stack}</pre>}
+        <h3 style={{ fontSize: "14px", fontWeight: "bold", marginTop: "20px", marginBottom: "8px" }}>Текущая структура БД на сервере:</h3>
+        <pre style={{ fontSize: "11px", whiteSpace: "pre-wrap", background: "#e2e8f0", padding: "12px", borderRadius: "8px", color: "#1e293b" }}>{dbSchemaInfo}</pre>
       </div>
     );
   }

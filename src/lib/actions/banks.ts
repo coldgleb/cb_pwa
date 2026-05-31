@@ -36,12 +36,17 @@ export async function updateBank(id: number, formData: FormData) {
 
   const name = formData.get("name") as string;
   const logo = formData.get("logo") as string;
-  const website = formData.get("website") as string;
+  const website = formData.get("website") as string | null;
 
   if (!name) throw new Error("Name is required");
 
+  const updateData: any = { name, logo };
+  if (website !== null) {
+    updateData.website = website;
+  }
+
   await db.update(banks)
-    .set({ name, logo, website })
+    .set(updateData)
     .where(eq(banks.id, id));
 
   revalidatePath("/admin/banks");

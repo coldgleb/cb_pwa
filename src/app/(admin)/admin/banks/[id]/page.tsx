@@ -54,6 +54,16 @@ export default async function EditBankPage({ params }: { params: Promise<{ id: s
                 className="sber-input"
               />
             </div>
+            <div className={stack({ gap: "6px" })}>
+              <label className="sber-label">САЙТ (БЕЗ HTTPS://)</label>
+              <input
+                name="website"
+                type="text"
+                defaultValue={bank.website || ""}
+                placeholder="example.com"
+                className="sber-input"
+              />
+            </div>
             <button type="submit" className="sber-button">
               Обновить данные
             </button>
