@@ -2,7 +2,7 @@
 import { db } from "@/db";
 import { userCards, bankCards, banks, merchants, bankCategories } from "@/db/schema";
 import { auth } from "@/auth";
-import { eq } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { ensureMerchantExists } from "./merchants";
 import { calculateCashbackForTransaction } from "./cashback-engine";
 
@@ -29,7 +29,7 @@ export async function findBestCardForPurchase(merchantName: string, mccCode: str
     await ensureMerchantExists(merchantName);
   }
 
-  // Fetch all user cards
+  // Fetch all user cards (strictly filtered by debit/credit)
   const cards = await db.select({
     id: userCards.id,
     lastFour: userCards.lastFourDigits,
@@ -37,40 +37,54 @@ export async function findBestCardForPurchase(merchantName: string, mccCode: str
     bankName: banks.name,
     bankLogo: banks.logo,
     bankWebsite: banks.website,
+    loyaltyProgramId: bankCards.loyaltyProgramId,
   })
   .from(userCards)
   .innerJoin(bankCards, eq(userCards.bankCardId, bankCards.id))
   .innerJoin(banks, eq(bankCards.bankId, banks.id))
-  .where(eq(userCards.userId, session.user.id));
+  .where(
+    and(
+      eq(userCards.userId, session.user.id),
+      inArray(bankCards.accountType, ["debit", "credit"])
+    )
+  );
 
-  const results: SearchResult[] = [];
-  for (const card of cards) {
-    const { cashback, categoryId, nominalPercentage } = await calculateCashbackForTransaction(
-      amount,
-      mccCode,
-      merchantName,
-      card.id,
-      todayStr
-    );
+  // 1. Parallelize cashback calculation for all cards
+  const calculations = await Promise.all(
+    cards.map(card => 
+      calculateCashbackForTransaction(amount, mccCode, merchantName, card.id, todayStr)
+    )
+  );
 
-    let categoryName = "Остальные покупки";
-    if (categoryId) {
-       const [cat] = await db.select({ name: bankCategories.name }).from(bankCategories).where(eq(bankCategories.id, categoryId)).limit(1);
-       if (cat) categoryName = cat.name;
-    }
+  // 2. Fetch all unique category names needed in one query
+  const categoryIds = calculations.map(c => c.categoryId).filter((id): id is number => id !== null);
+  const uniqueCategoryIds = Array.from(new Set(categoryIds));
+  
+  const categoriesData = uniqueCategoryIds.length > 0
+    ? await db
+        .select({ id: bankCategories.id, name: bankCategories.name })
+        .from(bankCategories)
+        .where(inArray(bankCategories.id, uniqueCategoryIds))
+    : [];
+  
+  const categoryMap = new Map(categoriesData.map(c => [c.id, c.name]));
 
-    results.push({
+  const results: SearchResult[] = cards.map((card, idx) => {
+    const calc = calculations[idx];
+    const categoryName = calc.categoryId ? categoryMap.get(calc.categoryId) || "Остальные покупки" : "Остальные покупки";
+
+    return {
       id: card.id,
       lastFour: card.lastFour,
       cardName: card.cardName,
       bankName: card.bankName,
       bankLogo: card.bankLogo,
       bankWebsite: card.bankWebsite,
-      cashback,
-      percentage: nominalPercentage || 0,
+      cashback: calc.cashback,
+      percentage: calc.nominalPercentage || 0,
       categoryName
-    });
-  }
+    };
+  });
 
   return results.sort((a, b) => b.cashback - a.cashback);
 }

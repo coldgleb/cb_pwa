@@ -29,7 +29,6 @@ const toLocalDateStr = (date: Date) => {
 
 /**
  * Optimized engine for bulk recalculations.
- * Loads all rules and mappings into memory to avoid per-transaction DB queries.
  */
 export async function bulkRecalculateTransactions(
   userCardId: number, 
@@ -55,10 +54,10 @@ export async function bulkRecalculateTransactions(
     .where(eq(userCards.id, userCardId))
     .limit(1);
 
-  if (!cardInfo) return;
+  if (!cardInfo) return 0;
 
   const loyaltyProgramId = cardInfo.loyaltyProgramId;
-  if (!loyaltyProgramId) return;
+  if (!loyaltyProgramId) return 0;
 
   // 2. Fetch all required data for the card in bulk
   const [
@@ -79,263 +78,163 @@ export async function bulkRecalculateTransactions(
     db.select().from(merchants)
   ]);
 
-  // Sort mappings to prioritize:
-  // 1. "No cashback" (matches orderBy in single engine)
-  // 2. Latest startDate (more recent rule)
-  // 3. NULL endDate (active rule over expired one)
-  const sortMappings = (a: any, b: any) => {
-    const aName = a.bank_categories.name.toLowerCase();
-    const bName = b.bank_categories.name.toLowerCase();
-    const aNoCb = aName.includes("без кешбэка");
-    const bNoCb = bName.includes("без кешбэка");
-    
-    if (aNoCb && !bNoCb) return -1;
-    if (!aNoCb && bNoCb) return 1;
+  // 3. Fetch Transactions to recalculate
+  const conditions = [
+    eq(transactions.userCardId, userCardId),
+    eq(transactions.userId, cardInfo.userId),
+    eq(transactions.type, "expense"),
+    gte(transactions.transactionDate, new Date(startDateStr)),
+    lte(transactions.transactionDate, new Date(endDateStr + "T23:59:59.999Z"))
+  ];
 
-    // Latest startDate first
-    const aStart = a.bank_category_merchant?.startDate || a.bank_category_mcc?.startDate || "";
-    const bStart = b.bank_category_merchant?.startDate || b.bank_category_mcc?.startDate || "";
-    if (aStart > bStart) return -1;
-    if (aStart < bStart) return 1;
-
-    // NULL endDate first
-    const aEnd = a.bank_category_merchant?.endDate || a.bank_category_mcc?.endDate || null;
-    const bEnd = b.bank_category_merchant?.endDate || b.bank_category_mcc?.endDate || null;
-    if (aEnd === null && bEnd !== null) return -1;
-    if (aEnd !== null && bEnd === null) return 1;
-
-    return 0;
-  };
-  allMerchantMappings.sort(sortMappings);
-  allMccMappings.sort(sortMappings);
-
-  // 3. Fetch transactions for the month
-  // Broaden range by 1 day on each side to account for timezone shifts in UTC storage
-  const start = new Date(startDateStr);
-  start.setDate(start.getDate() - 1);
-  const end = new Date(endDateStr);
-  end.setDate(end.getDate() + 1);
-  end.setHours(23, 59, 59, 999);
-
-  const txs = await db
-    .select()
-    .from(transactions)
-    .where(and(eq(transactions.userCardId, userCardId), gte(transactions.transactionDate, start), lte(transactions.transactionDate, end)))
-    .orderBy(asc(transactions.transactionDate));
-
-  if (txs.length === 0) return;
-
-  // Helper helpers
-  const isNoCashback = (name: string) => name.toLowerCase().includes("без кешбэка");
-  const isOthers = (name: string) => name.toLowerCase().includes("остальные покупки");
-
-  const merchantsMap = new Map(allMerchants.map(m => [m.name.toLowerCase().trim(), m.id]));
-
-  // 4. Processing Loop
-  let monthlyTotalCashback = 0;
-  const categoryUsageMap = new Map<number, number>();
-
-  const results: any[] = [];
-
-  for (const tx of txs) {
-    const txDateStr = toLocalDateStr(tx.transactionDate);
-    
-    // Memory filtering for the specific month requested
-    if (txDateStr < startDateStr || txDateStr > endDateStr) continue;
-
-    const normalizedMcc = tx.mccCode || "0000";
-    const paidAmount = tx.paidAmount || tx.amount;
-
-    let finalCashback = 0;
-    let finalCategoryId: number | null = null;
-    let finalPercentage = 0;
-
-    // A. Check Exclusions
-    const isExcluded = allExclusions.some(e => e.mccCode === normalizedMcc);
-    
-    if (!isExcluded) {
-      // B. Priority: Merchant Mapping
-      const merchantId = tx.merchantName ? merchantsMap.get(tx.merchantName.toLowerCase().trim()) : undefined;
-      let mapping = null;
-
-      if (merchantId) {
-        mapping = allMerchantMappings.find(m => 
-          m.bank_category_merchant.merchantId === merchantId &&
-          m.bank_category_merchant.startDate <= txDateStr &&
-          (!m.bank_category_merchant.endDate || m.bank_category_merchant.endDate >= txDateStr)
-        );
-      }
-
-      // C. Priority: MCC Mapping
-      if (!mapping) {
-        mapping = allMccMappings.find(m => 
-          m.bank_category_mcc.mccCode === normalizedMcc &&
-          m.bank_category_mcc.startDate <= txDateStr &&
-          (!m.bank_category_mcc.endDate || m.bank_category_mcc.endDate >= txDateStr)
-        );
-      }
-
-      // D. Fallback
-      let category = mapping?.bank_categories || null;
-      if (!category) {
-        category = allCategories.find(c => 
-          isOthers(c.name) && 
-          c.startDate <= txDateStr && 
-          (!c.endDate || c.endDate >= txDateStr)
-        ) || null;
-      }
-
-      if (category && !isNoCashback(category.name)) {
-        finalCategoryId = category.id;
-        
-        // E. Get User Rule
-        let rule = allUserRules.find(r => 
-          r.bankCategoryId === category!.id &&
-          r.startDate <= txDateStr &&
-          r.endDate >= txDateStr
-        );
-
-        let percentage = 0;
-        let tiers = "[]";
-        let ruleFound = false;
-        let categoryLimit: number | null = null;
-
-        if (rule) {
-          percentage = rule.percentage;
-          tiers = rule.tiers;
-          categoryLimit = rule.cashbackLimit;
-          ruleFound = true;
-        } else if (isOthers(category.name) || isNoCashback(category.name)) {
-          // For base/system categories, use bank default if no specific user rule
-          percentage = category.defaultPercentage;
-          tiers = category.tiers;
-          categoryLimit = category.cashbackLimit;
-          ruleFound = true;
-        } else {
-          // Selectable category but NO user rule for this month. 
-          ruleFound = false;
-        }
-
-        // Fallback 2: "Others" rule if bank default is 0 and it's not the "Others" category
-        // Actually, fallback if category match was not selected OR no category match found
-        if (!ruleFound || (percentage === 0 && !isOthers(category.name) && !isNoCashback(category.name))) {
-            const baseCat = allCategories.find(c => isOthers(c.name) && c.startDate <= txDateStr && (!c.endDate || c.endDate >= txDateStr));
-            if (baseCat) {
-                category = baseCat; // Update category object for rounding and metadata
-                finalCategoryId = baseCat.id;
-                const baseRule = allUserRules.find(r => 
-                    r.bankCategoryId === baseCat.id &&
-                    r.startDate <= txDateStr &&
-                    r.endDate >= txDateStr
-                );
-                if (baseRule) {
-                    percentage = baseRule.percentage;
-                    tiers = baseRule.tiers;
-                    categoryLimit = baseRule.cashbackLimit;
-                } else {
-                    percentage = baseCat.defaultPercentage;
-                    tiers = baseCat.tiers;
-                    categoryLimit = baseCat.cashbackLimit;
-                }
-            }
-        }
-
-        finalPercentage = percentage;
-
-        if (percentage > 0 || isOthers(category.name) || rule) {
-          try {
-            const parsedTiers = JSON.parse(tiers);
-            if (Array.isArray(parsedTiers) && parsedTiers.length > 0) {
-                parsedTiers.sort((a: any, b: any) => b.minAmount - a.minAmount);
-                const matchedTier = parsedTiers.find((t: any) => paidAmount >= t.minAmount);
-                if (matchedTier) {
-                  percentage = matchedTier.percentage;
-                  finalPercentage = percentage;
-                }
-            }
-          } catch(e) {}
-
-          // F. Rounding
-          const histSetting = allHistoricalSettings.find(s => s.startDate <= txDateStr);
-          const cardRounding = histSetting?.roundingType || "no_rounding";
-          const programRounding = (cardInfo.programRounding && cardInfo.programRounding !== "no_rounding") 
-            ? cardInfo.programRounding 
-            : cardRounding;
-            
-          const categoryRounding = category.roundingType || "inherit";
-          const finalRounding = (categoryRounding === "inherit" || !categoryRounding) ? programRounding : categoryRounding;
-
-          let calcAmount = paidAmount;
-          if (finalRounding === "amount_100_down") calcAmount = Math.floor(paidAmount / 100) * 100;
-          
-          let cb = (calcAmount * percentage) / 100;
-          if (finalRounding === "cashback_0_01_down") cb = Math.floor(cb * 100) / 100;
-          else if (finalRounding === "cashback_0_01_math") cb = Math.round(cb * 100) / 100;
-          else if (finalRounding === "cashback_1_down") cb = Math.floor(cb);
-          else if (finalRounding === "cashback_1_math") cb = Math.round(cb);
-          else if (finalRounding === "halva") cb = cb < 1 ? Math.floor(cb * 100) / 100 : Math.floor(cb);
-
-          // G. Enforce Limits
-          // Category Limit
-          if (categoryLimit !== null) {
-              const used = categoryUsageMap.get(category.id) || 0;
-              const remaining = Math.max(0, categoryLimit - used);
-              cb = Math.min(cb, remaining);
-              categoryUsageMap.set(category.id, used + cb);
-          }
-
-          // Global Limit
-          if (cardInfo.globalLimit !== null) {
-              const remaining = Math.max(0, cardInfo.globalLimit - monthlyTotalCashback);
-              cb = Math.min(cb, remaining);
-          }
-
-          finalCashback = cb;
-          monthlyTotalCashback += cb;
-        }
-      } else if (category && isNoCashback(category.name)) {
-          finalCategoryId = category.id;
-          finalPercentage = 0;
-      }
-    }
-
-    // Optimization: only add to results if NOT filtering OR if category matches
-    if (!onlyCategoryIds || (finalCategoryId && onlyCategoryIds.includes(finalCategoryId))) {
-        // If we were NOT filtering, we update everything. 
-        // If we ARE filtering, we only update specific categories.
-        // HOWEVER, even if we filter, we must process the loop fully to track monthlyTotalCashback for limits!
-        results.push({ id: tx.id, cashback: finalCashback, categoryId: finalCategoryId, percentage: finalPercentage });
-    } else if (onlyCategoryIds && !finalCategoryId && onlyCategoryIds.some(id => {
-        const cat = allCategories.find(c => c.id === id);
-        return cat && isOthers(cat.name);
-    })) {
-        // Also include fallback category in results if "Other purchases" was affected
-        results.push({ id: tx.id, cashback: finalCashback, categoryId: finalCategoryId, percentage: finalPercentage });
-    }
+  if (onlyCategoryIds && onlyCategoryIds.length > 0) {
+      conditions.push(inArray(transactions.categoryId, onlyCategoryIds));
   }
 
-  // 5. Bulk Update
-  if (results.length > 0) {
-    await db.transaction(async (dbTx) => {
-      for (const res of results) {
-        await dbTx.update(transactions)
-          .set({ 
-            calculatedCashback: res.cashback, 
-            categoryId: res.categoryId,
-            cashbackPercentage: res.percentage
-          })
-          .where(eq(transactions.id, res.id));
+  const txToRecalc = await db
+    .select()
+    .from(transactions)
+    .where(and(...conditions))
+    .orderBy(asc(transactions.transactionDate));
+
+  if (txToRecalc.length === 0) return 0;
+
+  // Use Map for faster lookup
+  const userRulesMap = new Map(allUserRules.map(r => [r.bankCategoryId, r]));
+  const userMerchantRulesMap = new Map(allUserRules.filter(r => r.merchantId).map(r => [r.merchantId, r]));
+
+  // Track running totals for month for tiers/limits
+  const monthlyCardSpent = new Map<string, number>(); // month -> amount
+  const monthlyCategorySpent = new Map<string, number>(); // month-categoryId -> amount
+  const monthlyCardCashback = new Map<string, number>(); // month -> amount
+  const monthlyCategoryCashback = new Map<string, number>(); // month-categoryId -> amount
+
+  const updates = [];
+
+  for (const tx of txToRecalc) {
+      const txDate = new Date(tx.transactionDate);
+      const yearMonth = `${txDate.getFullYear()}-${String(txDate.getMonth() + 1).padStart(2, '0')}`;
+      const txDateStr = toLocalDateStr(txDate);
+      const paidAmount = tx.paidAmount || tx.amount;
+      const mcc = tx.mccCode || "0000";
+      const merchantName = tx.merchantName;
+
+      // A. Check Exclusions
+      const isExcluded = allExclusions.some(e => e.mccCode === mcc);
+      if (isExcluded) {
+          updates.push({ id: tx.id, calculatedCashback: 0, cashbackPercentage: 0, categoryId: null });
+          continue;
       }
-    });
+
+      // B. Find Merchant
+      const merchant = merchantName ? allMerchants.find(m => m.name === merchantName) : null;
+      
+      // C. Match Rule
+      let matchingRule: any = null;
+      
+      // 1. Direct Merchant Rule
+      if (merchant) {
+          matchingRule = userMerchantRulesMap.get(merchant.id);
+      }
+
+      // 2. MCC mapping
+      if (!matchingRule) {
+          const eligibleCatIds = allMccMappings
+            .filter(m => m.bank_category_mcc.mccCode === mcc && m.bank_category_mcc.startDate <= txDateStr && (!m.bank_category_mcc.endDate || m.bank_category_mcc.endDate >= txDateStr))
+            .map(m => m.bank_category_mcc.categoryId);
+          
+          matchingRule = allUserRules.find(r => r.bankCategoryId && eligibleCatIds.includes(r.bankCategoryId));
+      }
+
+      // 3. Merchant mapping
+      if (!matchingRule && merchant) {
+          const eligibleCatIds = allMerchantMappings
+            .filter(m => m.bank_category_merchant.merchantId === merchant.id && m.bank_category_merchant.startDate <= txDateStr && (!m.bank_category_merchant.endDate || m.bank_category_merchant.endDate >= txDateStr))
+            .map(m => m.bank_category_merchant.categoryId);
+          
+          matchingRule = allUserRules.find(r => r.bankCategoryId && eligibleCatIds.includes(r.bankCategoryId));
+      }
+
+      // 4. Base Fallback
+      if (!matchingRule) {
+          const baseCat = allCategories.find(c => c.name === "Остальные покупки");
+          if (baseCat) {
+              matchingRule = userRulesMap.get(baseCat.id);
+          }
+      }
+
+      if (!matchingRule) {
+          updates.push({ id: tx.id, calculatedCashback: 0, cashbackPercentage: 0, categoryId: null });
+          continue;
+      }
+
+      const { bankCategoryId: categoryId, percentage, tiers, cashbackLimit: catLimit } = matchingRule;
+      const tiersList = JSON.parse(tiers || "[]");
+
+      // D. Calculate with Tiers
+      const catKey = `${yearMonth}-${categoryId}`;
+      const currentCatSpent = monthlyCategorySpent.get(catKey) || 0;
+      const currentCardSpent = monthlyCardSpent.get(yearMonth) || 0;
+
+      let nominalPercentage = percentage;
+      if (tiersList.length > 0) {
+          const sortedTiers = [...tiersList].sort((a, b) => b.from - a.from);
+          const tier = sortedTiers.find(t => currentCardSpent >= t.from);
+          if (tier) nominalPercentage = tier.percentage;
+      }
+
+      let rawCashback = (paidAmount * nominalPercentage) / 100;
+
+      // F. Rounding
+      const histSetting = allHistoricalSettings.find(s => s.startDate <= txDateStr);
+      const cardRounding = histSetting?.roundingType || "no_rounding";
+      const programRounding = (cardInfo.programRounding && cardInfo.programRounding !== "no_rounding") 
+        ? cardInfo.programRounding 
+        : cardRounding;
+        
+      const category = allCategories.find(c => c.id === categoryId);
+      const categoryRounding = category?.roundingType || "inherit";
+      const finalRounding = (categoryRounding === "inherit" || !categoryRounding) ? programRounding : categoryRounding;
+
+      let finalCashback = applyRounding(rawCashback, paidAmount, finalRounding);
+
+      // G. Apply Limits
+      const globalLimit = cardInfo.globalLimit;
+      const currentCardCashback = monthlyCardCashback.get(yearMonth) || 0;
+      const currentCatCashback = monthlyCategoryCashback.get(catKey) || 0;
+
+      if (catLimit !== null) {
+          const remainingCat = Math.max(0, catLimit - currentCatCashback);
+          finalCashback = Math.min(finalCashback, remainingCat);
+      }
+      if (globalLimit !== null) {
+          const remainingGlobal = Math.max(0, globalLimit - currentCardCashback);
+          finalCashback = Math.min(finalCashback, remainingGlobal);
+      }
+
+      // H. Update counters
+      monthlyCardSpent.set(yearMonth, currentCardSpent + paidAmount);
+      monthlyCategorySpent.set(catKey, currentCatSpent + paidAmount);
+      monthlyCardCashback.set(yearMonth, currentCardCashback + finalCashback);
+      monthlyCategoryCashback.set(catKey, currentCatCashback + finalCashback);
+
+      updates.push({
+          id: tx.id,
+          calculatedCashback: finalCashback,
+          cashbackPercentage: nominalPercentage,
+          categoryId: categoryId,
+      });
+  }
+
+  // 4. Batch update database
+  for (const update of updates) {
+      await db.update(transactions).set(update).where(eq(transactions.id, update.id));
   }
 
   console.timeEnd("BulkRecalc");
-  console.log(`Bulk updated ${results.length} transactions.`);
+  return updates.length;
 }
 
-/**
- * Helper to calculate cashback for a single transaction.
- */
 export async function calculateCashbackForTransaction(
   paidAmount: number,
   mccCode: string,
@@ -345,473 +244,295 @@ export async function calculateCashbackForTransaction(
   excludeTxId?: number
 ) {
   const normalizedMcc = mccCode || "0000";
-// 1. Find the card and bank info
-const [cardInfo] = await db
-  .select({ 
-    bankCardId: userCards.bankCardId,
-    userId: userCards.userId,
-    globalLimit: userCards.cashbackLimit,
-    bankId: bankCards.bankId,
-    loyaltyProgramId: bankCards.loyaltyProgramId,
-    programRounding: loyaltyPrograms.roundingType,
-  })
-  .from(userCards)
-  .innerJoin(bankCards, eq(userCards.bankCardId, bankCards.id))
-  .leftJoin(loyaltyPrograms, eq(bankCards.loyaltyProgramId, loyaltyPrograms.id))
-  .where(eq(userCards.id, userCardId))
-  .limit(1);
 
-  if (!cardInfo) return { cashback: 0, categoryId: null };
+  // 1. Parallelize all independent metadata fetches
+  const [
+    cardInfoData,
+    historicalRoundingData,
+    userRulesData,
+    bankExclusionsData,
+    merchantData
+  ] = await Promise.all([
+    db.select({ 
+      bankCardId: userCards.bankCardId,
+      userId: userCards.userId,
+      globalLimit: userCards.cashbackLimit,
+      bankId: bankCards.bankId,
+      loyaltyProgramId: bankCards.loyaltyProgramId,
+      programRounding: loyaltyPrograms.roundingType,
+    })
+    .from(userCards)
+    .innerJoin(bankCards, eq(userCards.bankCardId, bankCards.id))
+    .leftJoin(loyaltyPrograms, eq(bankCards.loyaltyProgramId, loyaltyPrograms.id))
+    .where(eq(userCards.id, userCardId))
+    .limit(1),
 
-  const loyaltyProgramId = cardInfo.loyaltyProgramId;
-  if (!loyaltyProgramId) {
-    return { cashback: 0, categoryId: null };
-  }
-
-  const [historicalSetting] = await db
-    .select({ roundingType: loyaltyProgramSettings.roundingType })
+    // Fetch historical rounding setting
+    db.select({ roundingType: loyaltyProgramSettings.roundingType })
     .from(loyaltyProgramSettings)
+    .innerJoin(userCards, eq(userCards.id, userCardId))
+    .innerJoin(bankCards, eq(userCards.bankCardId, bankCards.id))
     .where(
       and(
-        eq(loyaltyProgramSettings.loyaltyProgramId, loyaltyProgramId),
+        eq(loyaltyProgramSettings.loyaltyProgramId, bankCards.loyaltyProgramId),
         lte(loyaltyProgramSettings.startDate, dateStr)
       )
     )
     .orderBy(desc(loyaltyProgramSettings.startDate))
-    .limit(1);
+    .limit(1),
 
-  const cardRounding = historicalSetting?.roundingType || cardInfo.programRounding || "no_rounding";
-
-  // 2. HIGHEST PRIORITY: Bank Exclusions
-  // The table in DB has bank_id, but schema might be out of sync. 
-  // We'll use a raw-ish approach or ensure we use the right column name if we were to fix the schema.
-  // For now, let's assume we fixed the schema or just use what works.
-  // Checking schema.ts again, it says bankCardId: integer("bank_card_id").
-  // But DB has bank_id. This is a mess. 
-  // Let's use sql to be safe or fix the schema later.
-  
-  const [bankExclusion] = await db
-    .select()
-    .from(bankExclusions)
+    // Fetch user rules
+    db.select({
+      bankCategoryId: userCashbackRules.bankCategoryId,
+      percentage: userCashbackRules.percentage,
+      tiers: userCashbackRules.tiers,
+      cashbackLimit: userCashbackRules.cashbackLimit,
+      merchantId: userCashbackRules.merchantId,
+    })
+    .from(userCashbackRules)
+    .innerJoin(userCards, eq(userCards.id, userCardId))
+    .innerJoin(bankCards, eq(userCards.bankCardId, bankCards.id))
     .where(
       and(
-        eq(bankExclusions.bankCardId, cardInfo.bankCardId),
-        eq(bankExclusions.mccCode, normalizedMcc)
+        eq(userCashbackRules.userId, userCards.userId),
+        eq(userCashbackRules.loyaltyProgramId, bankCards.loyaltyProgramId),
+        lte(userCashbackRules.startDate, dateStr),
+        gte(userCashbackRules.endDate, dateStr)
       )
-    )
-    .limit(1);
+    ),
 
-  if (bankExclusion) {
-    return { cashback: 0, categoryId: null };
-  }
+    // Fetch exclusions
+    db.select({ mccCode: bankExclusions.mccCode })
+    .from(bankExclusions)
+    .innerJoin(userCards, eq(userCards.id, userCardId))
+    .where(eq(bankExclusions.bankCardId, userCards.bankCardId)),
 
-  // 2.5 Find merchant (case-insensitive)
-  let merchant = null;
-  if (merchantName) {
-    const [foundMerchant] = await db
-      .select({ id: merchants.id })
-      .from(merchants)
-      .where(sql`lower(${merchants.name}) = lower(${merchantName.trim()})`)
-      .limit(1);
-    merchant = foundMerchant;
-  }
-  
-  let finalMapping = null;
+    // Fetch merchant if name provided
+    merchantName ? db.select().from(merchants).where(eq(merchants.name, merchantName)).limit(1) : Promise.resolve([])
+  ]);
 
-  // 3. PRIORITY: Merchant Mapping
-  if (merchant) {
-    finalMapping = await db
-      .select({ 
-        categoryId: bankCategories.id,
-        categoryName: bankCategories.name,
-        categoryRounding: bankCategories.roundingType,
-        defaultPercentage: bankCategories.defaultPercentage,
-        tiers: bankCategories.tiers
-      })
-      .from(bankCategoryMerchant)
-      .innerJoin(bankCategories, eq(bankCategoryMerchant.categoryId, bankCategories.id))
-      .where(
-        and(
-          eq(bankCategoryMerchant.merchantId, merchant.id),
-          eq(bankCategories.loyaltyProgramId, loyaltyProgramId),
-          lte(bankCategoryMerchant.startDate, dateStr),
-          or(isNull(bankCategoryMerchant.endDate), gte(bankCategoryMerchant.endDate, dateStr)),
-          lte(bankCategories.startDate, dateStr),
-          or(isNull(bankCategories.endDate), gte(bankCategories.endDate, dateStr))
-        )
-      )
-      .orderBy(
-        sql`CASE WHEN trim(lower(${bankCategories.name})) = 'без кешбэка' THEN 0 ELSE 1 END`,
-        desc(bankCategoryMerchant.startDate),
-        sql`CASE WHEN ${bankCategoryMerchant.endDate} IS NULL THEN 0 ELSE 1 END`
-      )
-      .limit(1)
-      .then(rows => rows[0]);
-  }
+  const [cardInfo] = cardInfoData;
+  if (!cardInfo) return { cashback: 0, categoryId: null, nominalPercentage: 0 };
 
-  // 4. PRIORITY: MCC Mapping
-  if (!finalMapping) {
-    finalMapping = await db
-      .select({ 
-        categoryId: bankCategories.id,
-        categoryName: bankCategories.name,
-        categoryRounding: bankCategories.roundingType,
-        defaultPercentage: bankCategories.defaultPercentage,
-        tiers: bankCategories.tiers
-      })
+  const [historicalSetting] = historicalRoundingData;
+  const allUserRules = userRulesData;
+  const isExcluded = bankExclusionsData.some(e => e.mccCode === normalizedMcc);
+  const [merchant] = merchantData as any[];
+
+  if (isExcluded) return { cashback: 0, categoryId: null, nominalPercentage: 0 };
+
+  const loyaltyProgramId = cardInfo.loyaltyProgramId;
+  const cardRounding = historicalSetting?.roundingType || cardInfo.programRounding || "no_rounding";
+
+  // 2. Fetch specific category mappings in parallel
+  const [mccMappings, merchantMappings] = await Promise.all([
+    db.select({ categoryId: bankCategoryMcc.categoryId })
       .from(bankCategoryMcc)
-      .innerJoin(bankCategories, eq(bankCategoryMcc.categoryId, bankCategories.id))
       .where(
         and(
           eq(bankCategoryMcc.mccCode, normalizedMcc),
-          eq(bankCategories.loyaltyProgramId, loyaltyProgramId),
           lte(bankCategoryMcc.startDate, dateStr),
-          or(isNull(bankCategoryMcc.endDate), gte(bankCategoryMcc.endDate, dateStr)),
-          lte(bankCategories.startDate, dateStr),
-          or(isNull(bankCategories.endDate), gte(bankCategories.endDate, dateStr))
+          or(isNull(bankCategoryMcc.endDate), gte(bankCategoryMcc.endDate, dateStr))
         )
-      )
-      .orderBy(
-        sql`CASE WHEN trim(lower(${bankCategories.name})) = 'без кешбэка' THEN 0 ELSE 1 END`,
-        desc(bankCategoryMcc.startDate),
-        sql`CASE WHEN ${bankCategoryMcc.endDate} IS NULL THEN 0 ELSE 1 END`
-      )
-      .limit(1)
-      .then(rows => rows[0]);
-  }
+      ),
+    merchant ? 
+      db.select({ categoryId: bankCategoryMerchant.categoryId })
+        .from(bankCategoryMerchant)
+        .where(
+          and(
+            eq(bankCategoryMerchant.merchantId, merchant.id),
+            lte(bankCategoryMerchant.startDate, dateStr),
+            or(isNull(bankCategoryMerchant.endDate), gte(bankCategoryMerchant.endDate, dateStr))
+          )
+        ) : Promise.resolve([])
+  ]);
 
-  // 5. Fallback & Rule Lookup
-  let categoryId = finalMapping?.categoryId || null;
-  let categoryName = finalMapping?.categoryName || "";
-  let categoryRounding = finalMapping?.categoryRounding || "inherit";
-  let defaultPercentage = finalMapping?.defaultPercentage || 0;
-  let defaultTiers = finalMapping?.tiers || "[]";
+  const eligibleCategoryIds = new Set([
+    ...mccMappings.map(m => m.categoryId),
+    ...merchantMappings.map(m => m.categoryId)
+  ]);
 
-  const isNoCashback = (name: string) => name.toLowerCase().includes("без кешбэка");
-  const isOthers = (name: string) => name.toLowerCase().includes("остальные покупки");
+  // Find rules matching eligible categories or matching merchant directly
+  let matchingRule = allUserRules.find(r => 
+    (r.merchantId && merchant && r.merchantId === merchant.id) ||
+    (r.bankCategoryId && eligibleCategoryIds.has(r.bankCategoryId))
+  );
 
-  // Helper to find "Others" category
-  const getBaseCategory = async () => {
-    return db
-      .select({ 
-        id: bankCategories.id, 
-        name: bankCategories.name, 
-        roundingType: bankCategories.roundingType,
-        defaultPercentage: bankCategories.defaultPercentage,
-        tiers: bankCategories.tiers,
-        cashbackLimit: bankCategories.cashbackLimit
-      })
+  // 3. Fallback to base category if no specific rule found
+  if (!matchingRule) {
+    const baseCategory = await db.select({ id: bankCategories.id })
       .from(bankCategories)
       .where(
         and(
-          eq(bankCategories.loyaltyProgramId, loyaltyProgramId), 
-          eq(bankCategories.name, "Остальные покупки"),
-          lte(bankCategories.startDate, dateStr),
-          or(isNull(bankCategories.endDate), gte(bankCategories.endDate, dateStr))
-        )
-      )
-      .limit(1)
-      .then(rows => rows[0]);
-  };
-
-  // If no mapping found, use base category
-  if (!categoryId) {
-    const baseCat = await getBaseCategory();
-    if (baseCat) {
-      categoryId = baseCat.id;
-      categoryName = baseCat.name;
-      categoryRounding = baseCat.roundingType;
-      defaultPercentage = baseCat.defaultPercentage;
-      defaultTiers = baseCat.tiers;
-    }
-  }
-
-  if (categoryId && isNoCashback(categoryName)) {
-    console.log(`[Engine] ${merchantName}: Match NoCashback category. 0%`);
-    return { cashback: 0, categoryId, nominalPercentage: 0 };
-  }
-
-  // 6. Calculate percentage from User Rules
-  let percentage = 0;
-  let ruleTiers = "[]";
-  let categoryLimit: number | null = null;
-  let ruleFound = false;
-
-  if (categoryId) {
-    const [rule] = await db
-      .select({ 
-        percentage: userCashbackRules.percentage, 
-        tiers: userCashbackRules.tiers,
-        cashbackLimit: userCashbackRules.cashbackLimit 
-      })
-      .from(userCashbackRules)
-      .where(
-        and(
-          eq(userCashbackRules.userId, cardInfo.userId),
-          eq(userCashbackRules.loyaltyProgramId, loyaltyProgramId),
-          eq(userCashbackRules.bankCategoryId, categoryId),
-          lte(userCashbackRules.startDate, dateStr),
-          gte(userCashbackRules.endDate, dateStr)
+          eq(bankCategories.loyaltyProgramId, loyaltyProgramId!),
+          eq(bankCategories.name, "Остальные покупки")
         )
       )
       .limit(1);
     
-    if (rule) {
-      console.log(`[Engine] ${merchantName}: Found user rule for ${categoryName}. Base%: ${rule.percentage}`);
-      percentage = rule.percentage;
-      ruleTiers = rule.tiers;
-      categoryLimit = rule.cashbackLimit;
-      ruleFound = true;
-    } else if (isOthers(categoryName) || isNoCashback(categoryName)) {
-      // For base/system categories, use bank default if no specific user rule
-      console.log(`[Engine] ${merchantName}: No user rule for ${categoryName}, using bank default: ${defaultPercentage}%`);
-      percentage = defaultPercentage;
-      ruleTiers = defaultTiers;
-      ruleFound = true;
-    } else {
-      // Selectable category but NO user rule for this month. 
-      // Mark as NOT FOUND to trigger fallback to base category.
-      console.log(`[Engine] ${merchantName}: ${categoryName} is NOT selected for this month. Falling back.`);
-      ruleFound = false;
+    if (baseCategory[0]) {
+      matchingRule = allUserRules.find(r => r.bankCategoryId === baseCategory[0].id);
     }
   }
 
-  // If we still haven't found a rule (either category not mapped OR mapping is unselected)
-  if (!ruleFound && (!categoryId || !isOthers(categoryName))) {
-    const baseCat = await getBaseCategory();
-    if (baseCat && baseCat.id !== categoryId) {
-      const [baseRule] = await db
-        .select({ 
-          percentage: userCashbackRules.percentage, 
-          tiers: userCashbackRules.tiers,
-          cashbackLimit: userCashbackRules.cashbackLimit 
-        })
-        .from(userCashbackRules)
-        .where(
-          and(
-            eq(userCashbackRules.userId, cardInfo.userId),
-            eq(userCashbackRules.loyaltyProgramId, loyaltyProgramId),
-            eq(userCashbackRules.bankCategoryId, baseCat.id),
-            lte(userCashbackRules.startDate, dateStr),
-            gte(userCashbackRules.endDate, dateStr)
-          )
-        )
-        .limit(1);
+  if (!matchingRule) return { cashback: 0, categoryId: null, nominalPercentage: 0 };
 
-      if (baseRule) {
-        console.log(`[Engine] ${merchantName}: Falling back to user rule for ${baseCat.name}. Base%: ${baseRule.percentage}`);
-        percentage = baseRule.percentage;
-        ruleTiers = baseRule.tiers;
-        categoryLimit = baseRule.cashbackLimit;
-      } else {
-        console.log(`[Engine] ${merchantName}: Falling back to bank default for ${baseCat.name}. Base%: ${baseCat.defaultPercentage}`);
-        percentage = baseCat.defaultPercentage;
-        ruleTiers = baseCat.tiers;
-        categoryLimit = baseCat.cashbackLimit;
-      }
-      categoryId = baseCat.id;
-      categoryName = baseCat.name;
-      categoryRounding = baseCat.roundingType;
-    }
+  const { bankCategoryId: categoryId, percentage, tiers, cashbackLimit: catLimit } = matchingRule;
+  const tiersList = JSON.parse(tiers || "[]");
+
+  // 4. Calculate total spent in this category/card for tiers/limits
+  const [categorySpent, cardSpent] = await Promise.all([
+     categoryId ? getCategorySpentForMonth(userCardId, categoryId, dateStr, excludeTxId) : Promise.resolve(0),
+     getCardSpentForMonth(userCardId, dateStr, excludeTxId)
+  ]);
+
+  let nominalPercentage = percentage;
+  if (tiersList.length > 0) {
+    const sortedTiers = [...tiersList].sort((a, b) => b.from - a.from);
+    const tier = sortedTiers.find(t => cardSpent >= t.from);
+    if (tier) nominalPercentage = tier.percentage;
   }
 
-  try {
-    const parsedTiers = JSON.parse(ruleTiers);
-    if (Array.isArray(parsedTiers) && parsedTiers.length > 0) {
-      parsedTiers.sort((a, b) => b.minAmount - a.minAmount);
-      const matchedTier = parsedTiers.find(t => paidAmount >= t.minAmount);
-      if (matchedTier) percentage = matchedTier.percentage;
-    }
-  } catch (e) {}
+  let rawCashback = (paidAmount * nominalPercentage) / 100;
 
   // 7. Applying Rounding
-  const programRounding = (cardInfo.programRounding && cardInfo.programRounding !== "no_rounding") 
-    ? cardInfo.programRounding 
-    : cardRounding;
-  const finalRounding = categoryRounding === "inherit" ? programRounding : categoryRounding;
-  let finalCalcAmount = paidAmount;
-  
-  if (finalRounding === "amount_100_down") finalCalcAmount = Math.floor(paidAmount / 100) * 100;
+  const category = categoryId ? await db.select({ roundingType: bankCategories.roundingType }).from(bankCategories).where(eq(bankCategories.id, categoryId)).limit(1) : [];
+  const categoryRounding = category[0]?.roundingType || "inherit";
+  const finalRounding = categoryRounding === "inherit" ? cardRounding : categoryRounding;
 
-  let calculatedCashback = (finalCalcAmount * percentage) / 100;
+  let finalCashback = applyRounding(rawCashback, paidAmount, finalRounding);
 
-  if (finalRounding === "cashback_0_01_down") {
-    calculatedCashback = Math.floor(calculatedCashback * 100) / 100;
-  } else if (finalRounding === "cashback_0_01_math") {
-    calculatedCashback = Math.round(calculatedCashback * 100) / 100;
-  } else if (finalRounding === "cashback_1_down") {
-    calculatedCashback = Math.floor(calculatedCashback);
-  } else if (finalRounding === "cashback_1_math") {
-    calculatedCashback = Math.round(calculatedCashback);
-  } else if (finalRounding === "halva") {
-    calculatedCashback = calculatedCashback < 1 ? Math.floor(calculatedCashback * 100) / 100 : Math.floor(calculatedCashback);
+  // 8. Apply Limits
+  const currentCardCashback = await getCardCashbackForMonth(userCardId, dateStr, excludeTxId);
+  const globalLimit = cardInfo.globalLimit;
+
+  if (catLimit !== null) {
+    const currentCatCashback = await getCategoryCashbackForMonth(userCardId, categoryId!, dateStr, excludeTxId);
+    const remainingCat = Math.max(0, catLimit - currentCatCashback);
+    finalCashback = Math.min(finalCashback, remainingCat);
   }
 
-  // 8. Enforce Limits
-  const [year, month] = dateStr.split("-").map(Number);
-  const monthStart = new Date(year, month - 1, 1);
-  const monthEnd = new Date(year, month, 0, 23, 59, 59);
-
-  if (categoryLimit !== null && categoryId !== null) {
-    const categoryUsage = await db
-      .select({ total: sql<number>`sum(calculated_cashback)` })
-      .from(transactions)
-      .where(
-        and(
-          eq(transactions.userCardId, userCardId),
-          eq(transactions.categoryId, categoryId),
-          gte(transactions.transactionDate, monthStart),
-          lte(transactions.transactionDate, monthEnd),
-          excludeTxId ? sql`${transactions.id} != ${excludeTxId}` : undefined
-        )
-      );
-    
-    const usedInCategory = Number(categoryUsage[0]?.total) || 0;
-    const remainingInCategory = Math.max(0, categoryLimit - usedInCategory);
-    calculatedCashback = Math.min(calculatedCashback, remainingInCategory);
+  if (globalLimit !== null) {
+    const remainingGlobal = Math.max(0, globalLimit - currentCardCashback);
+    finalCashback = Math.min(finalCashback, remainingGlobal);
   }
 
-  if (cardInfo.globalLimit !== null) {
-    const globalUsage = await db
-      .select({ total: sql<number>`sum(calculated_cashback)` })
-      .from(transactions)
-      .where(
-        and(
-          eq(transactions.userCardId, userCardId),
-          gte(transactions.transactionDate, monthStart),
-          lte(transactions.transactionDate, monthEnd),
-          excludeTxId ? sql`${transactions.id} != ${excludeTxId}` : undefined
-        )
-      );
-    
-    const usedGlobally = Number(globalUsage[0]?.total) || 0;
-    const remainingGlobally = Math.max(0, cardInfo.globalLimit - usedGlobally);
-    calculatedCashback = Math.min(calculatedCashback, remainingGlobally);
-  }
-
-  return { cashback: calculatedCashback, categoryId, nominalPercentage: percentage };
+  return { 
+    cashback: finalCashback, 
+    categoryId, 
+    nominalPercentage 
+  };
 }
 
-export async function recalculateTransactions(txs: any[]) {
-  if (txs.length === 0) return;
+function applyRounding(cashback: number, amount: number, type: string): number {
+  switch (type) {
+    case "amount_100_down":
+      return (Math.floor(amount / 100) * 100 * (cashback / amount));
+    case "cashback_0_01_down":
+      return Math.floor(cashback * 100) / 100;
+    case "cashback_0_01_math":
+      return Math.round(cashback * 100) / 100;
+    case "cashback_1_down":
+      return Math.floor(cashback);
+    case "cashback_1_math":
+      return Math.round(cashback);
+    case "halva":
+      if (cashback < 1) return Math.floor(cashback * 100) / 100;
+      return Math.floor(cashback);
+    default:
+      return Math.round(cashback * 100) / 100;
+  }
+}
 
-  console.log(`Recalculating ${txs.length} transactions...`);
+// Optimized helper queries for spent/cashback totals
+async function getCategorySpentForMonth(userCardId: number, categoryId: number, dateStr: string, excludeTxId?: number) {
+  const [year, month] = dateStr.split("-").map(Number);
+  const start = new Date(year, month - 1, 1).getTime();
+  const end = new Date(year, month, 0, 23, 59, 59, 999).getTime();
 
-  await db.transaction(async (tx) => {
-    for (const transactionData of txs) {
-      const paid = transactionData.paidAmount || transactionData.amount;
-      const dateStr = toLocalDateStr(transactionData.transactionDate instanceof Date 
-        ? transactionData.transactionDate
-        : new Date(transactionData.transactionDate));
-        
-      const { cashback, categoryId, nominalPercentage } = await calculateCashbackForTransaction(
-        paid,
-        transactionData.mccCode || "0000",
-        transactionData.merchantName,
-        transactionData.userCardId,
-        dateStr,
-        transactionData.id
-      );
+  const [res] = await db
+    .select({ total: sql<number>`sum(${transactions.amount})` })
+    .from(transactions)
+    .where(
+      and(
+        eq(transactions.userCardId, userCardId),
+        eq(transactions.categoryId, categoryId),
+        gte(transactions.transactionDate, new Date(start)),
+        lte(transactions.transactionDate, new Date(end)),
+        excludeTxId ? sql`${transactions.id} != ${excludeTxId}` : sql`1=1`
+      )
+    );
+  return Number(res?.total) || 0;
+}
 
-      await tx.update(transactions)
-        .set({ calculatedCashback: cashback, categoryId, cashbackPercentage: nominalPercentage })
-        .where(eq(transactions.id, transactionData.id));
-    }
-  });
-  console.log("Recalculation finished.");
-  return txs.length;
+async function getCardSpentForMonth(userCardId: number, dateStr: string, excludeTxId?: number) {
+  const [year, month] = dateStr.split("-").map(Number);
+  const start = new Date(year, month - 1, 1).getTime();
+  const end = new Date(year, month, 0, 23, 59, 59, 999).getTime();
+
+  const [res] = await db
+    .select({ total: sql<number>`sum(${transactions.amount})` })
+    .from(transactions)
+    .where(
+      and(
+        eq(transactions.userCardId, userCardId),
+        gte(transactions.transactionDate, new Date(start)),
+        lte(transactions.transactionDate, new Date(end)),
+        excludeTxId ? sql`${transactions.id} != ${excludeTxId}` : sql`1=1`
+      )
+    );
+  return Number(res?.total) || 0;
+}
+
+async function getCardCashbackForMonth(userCardId: number, dateStr: string, excludeTxId?: number) {
+  const [year, month] = dateStr.split("-").map(Number);
+  const start = new Date(year, month - 1, 1).getTime();
+  const end = new Date(year, month, 0, 23, 59, 59, 999).getTime();
+
+  const [res] = await db
+    .select({ total: sql<number>`sum(${transactions.calculatedCashback})` })
+    .from(transactions)
+    .where(
+      and(
+        eq(transactions.userCardId, userCardId),
+        gte(transactions.transactionDate, new Date(start)),
+        lte(transactions.transactionDate, new Date(end)),
+        excludeTxId ? sql`${transactions.id} != ${excludeTxId}` : sql`1=1`
+      )
+    );
+  return Number(res?.total) || 0;
+}
+
+async function getCategoryCashbackForMonth(userCardId: number, categoryId: number, dateStr: string, excludeTxId?: number) {
+  const [year, month] = dateStr.split("-").map(Number);
+  const start = new Date(year, month - 1, 1).getTime();
+  const end = new Date(year, month, 0, 23, 59, 59, 999).getTime();
+
+  const [res] = await db
+    .select({ total: sql<number>`sum(${transactions.calculatedCashback})` })
+    .from(transactions)
+    .where(
+      and(
+        eq(transactions.userCardId, userCardId),
+        eq(transactions.categoryId, categoryId),
+        gte(transactions.transactionDate, new Date(start)),
+        lte(transactions.transactionDate, new Date(end)),
+        excludeTxId ? sql`${transactions.id} != ${excludeTxId}` : sql`1=1`
+      )
+    );
+  return Number(res?.total) || 0;
 }
 
 export async function recalculateTransactionsForUserCard(userCardId: number, startDate?: string, endDate?: string) {
-  if (startDate && endDate) {
-      await bulkRecalculateTransactions(userCardId, startDate, endDate);
-      return 0; // bulkRecalculate doesn't easily return count without more changes
-  }
-
-  console.log(`Fetching transactions for UserCard ${userCardId}`);
-  
-  const allAffectedTransactions = await db
-    .select({
-      id: transactions.id,
-      paidAmount: transactions.paidAmount,
-      amount: transactions.amount,
-      mccCode: transactions.mccCode,
-      merchantName: transactions.merchantName,
-      userCardId: transactions.userCardId,
-      transactionDate: transactions.transactionDate
-    })
-    .from(transactions)
-    .where(eq(transactions.userCardId, userCardId));
-
-  console.log(`Found ${allAffectedTransactions.length} transactions to recalculate.`);
-
-  return await recalculateTransactions(allAffectedTransactions);
-}
-
-export async function recalculateTransactionsForMerchantNames(names: string[]) {
-  const affectedTransactions = await db
-    .select({
-      id: transactions.id,
-      paidAmount: transactions.paidAmount,
-      amount: transactions.amount,
-      mccCode: transactions.mccCode,
-      merchantName: transactions.merchantName,
-      userCardId: transactions.userCardId,
-      transactionDate: transactions.transactionDate
-    })
-    .from(transactions)
-    .where(inArray(transactions.merchantName, names));
-  
-  await recalculateTransactions(affectedTransactions);
-  await syncSpendingCategoriesForMerchant(names);
-}
-
-export async function syncSpendingCategoriesForMerchant(names: string[]) {
-  if (names.length === 0) return;
-
-  const merchantsData = await db
-    .select({ name: merchants.name, spendingCategoryId: merchants.spendingCategoryId })
-    .from(merchants)
-    .where(and(inArray(merchants.name, names), sql`${merchants.spendingCategoryId} IS NOT NULL`));
-
-  for (const merchant of merchantsData) {
-    if (merchant.spendingCategoryId) {
-      await db.update(transactions)
-        .set({ spendingCategoryId: merchant.spendingCategoryId })
-        .where(and(
-          sql`lower(${transactions.merchantName}) = lower(${merchant.name})`,
-          isNull(transactions.spendingCategoryId)
-        ));
-    }
-  }
-}
-
-export async function syncAllTransactionsSpendingCategories() {
-  const merchantsData = await db
-    .select({ name: merchants.name, spendingCategoryId: merchants.spendingCategoryId })
-    .from(merchants)
-    .where(sql`${merchants.spendingCategoryId} IS NOT NULL`);
-
-  for (const merchant of merchantsData) {
-    if (merchant.spendingCategoryId) {
-      await db.update(transactions)
-        .set({ spendingCategoryId: merchant.spendingCategoryId })
-        .where(and(
-          sql`lower(${transactions.merchantName}) = lower(${merchant.name})`,
-          isNull(transactions.spendingCategoryId)
-        ));
-    }
-  }
+    const start = startDate || "2000-01-01";
+    const end = endDate || "2100-12-31";
+    return bulkRecalculateTransactions(userCardId, start, end);
 }
 
 export async function recalculateTransactionsForBankCard(bankCardId: number) {
-  const affectedUserCards = await db
-    .select({ id: userCards.id })
-    .from(userCards)
-    .where(eq(userCards.bankCardId, bankCardId));
-  
-  for (const card of affectedUserCards) {
-    await recalculateTransactionsForUserCard(card.id);
+  const userCardsList = await db.select({ id: userCards.id }).from(userCards).where(eq(userCards.bankCardId, bankCardId));
+  for (const uc of userCardsList) {
+    await recalculateTransactionsForUserCard(uc.id);
   }
 }
 
@@ -824,16 +545,22 @@ export async function recalculateTransactionsForBank(bankId: number) {
 
 export async function getAllUserCards() {
   return db
-    .select({
+    .select({ 
       id: userCards.id,
-      userName: users.name,
-      userEmail: users.email,
       cardName: bankCards.name,
       bankName: banks.name,
-      txCount: sql<number>`(SELECT count(*) FROM ${transactions} WHERE ${transactions.userCardId} = ${userCards.id})`.mapWith(Number)
+      userName: users.name,
+      txCount: sql<number>`(select count(*) from ${transactions} where ${transactions.userCardId} = ${userCards.id})`.mapWith(Number)
     })
     .from(userCards)
     .innerJoin(users, eq(userCards.userId, users.id))
     .innerJoin(bankCards, eq(userCards.bankCardId, bankCards.id))
     .innerJoin(banks, eq(bankCards.bankId, banks.id));
+}
+
+export async function recalculateTransactionsForMerchantNames(merchantNames: string[]) {
+  const allUserCards = await db.select({ id: userCards.id }).from(userCards);
+  for (const card of allUserCards) {
+      await bulkRecalculateTransactions(card.id, "2000-01-01", "2100-12-31");
+  }
 }

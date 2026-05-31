@@ -5,10 +5,11 @@ import { loginUser, logoutUser } from "@/lib/actions/auth";
 import { css } from "../../styled-system/css";
 import { stack, flex } from "../../styled-system/patterns";
 import { eq, sql, and, asc } from "drizzle-orm";
-import { LogOut, ShieldCheck, ChevronRight, Landmark, Calendar, TrendingUp, AlertCircle } from "lucide-react";
+import { LogOut, ShieldCheck, ChevronRight, Landmark, Calendar, TrendingUp, AlertCircle, CreditCard } from "lucide-react";
 import { getIconUrl } from "@/lib/utils/icons";
 import ThemeIconButton from "@/components/ThemeIconButton";
 import PaymentCalendar from "@/components/PaymentCalendar";
+import Link from "next/link";
 
 const getAccountTypeLabel = (type: string) => {
   switch (type) {
@@ -28,12 +29,23 @@ export default async function Home() {
   let userCardsWithBalances: any[] = [];
   let stats = { totalBalance: 0, debt: 0 };
   let allPayments: any[] = [];
+  let userName = session?.user?.name || session?.user?.email || 'Гость';
 
   if (session?.user?.id) {
     try {
-      // 1. Fetch payments for the calendar
-      allPayments = await db
-        .select({
+      const now = new Date();
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+      // 1. Parallelize all independent DB calls for performance
+      const [
+        paymentsData,
+        cardsData,
+        sumStatsData,
+        transferInData,
+        incomeData,
+        userData
+      ] = await Promise.all([
+        db.select({
           id: creditPayments.id,
           userCardId: creditPayments.userCardId,
           amount: creditPayments.amount,
@@ -47,11 +59,9 @@ export default async function Home() {
         .innerJoin(userCards, eq(creditPayments.userCardId, userCards.id))
         .innerJoin(bankCards, eq(userCards.bankCardId, bankCards.id))
         .innerJoin(banks, eq(bankCards.bankId, banks.id))
-        .where(eq(creditPayments.userId, session.user.id));
+        .where(eq(creditPayments.userId, session.user.id)),
 
-      // 2. Card balances calculations
-      const myCards = await db
-        .select({
+        db.select({
           id: userCards.id,
           lastFour: userCards.lastFourDigits,
           cardName: bankCards.name,
@@ -67,20 +77,18 @@ export default async function Home() {
         .from(userCards)
         .where(eq(userCards.userId, session.user.id))
         .leftJoin(bankCards, eq(userCards.bankCardId, bankCards.id))
-        .leftJoin(banks, eq(bankCards.bankId, banks.id));
+        .leftJoin(banks, eq(bankCards.bankId, banks.id)),
 
-      const cardSumStats = await db
-        .select({
+        db.select({
           cardId: transactions.userCardId,
           type: transactions.type,
           sumAmount: sql<number>`sum(${transactions.amount})`
         })
         .from(transactions)
         .where(eq(transactions.userId, session.user.id))
-        .groupBy(transactions.userCardId, transactions.type);
+        .groupBy(transactions.userCardId, transactions.type),
 
-      const transferInStats = await db
-        .select({
+        db.select({
           toCardId: transactions.toUserCardId,
           sumAmount: sql<number>`sum(${transactions.amount})`
         })
@@ -91,7 +99,33 @@ export default async function Home() {
             eq(transactions.type, "transfer")
           )
         )
-        .groupBy(transactions.toUserCardId);
+        .groupBy(transactions.toUserCardId),
+
+        db.select({ total: sql<number>`sum(${transactions.amount})` })
+        .from(transactions)
+        .where(
+          and(
+            eq(transactions.userId, session.user.id),
+            eq(transactions.type, "income"),
+            sql`${transactions.transactionDate} >= ${startOfMonth.getTime()}`
+          )
+        ),
+
+        db.select({ name: users.name, email: users.email })
+        .from(users)
+        .where(eq(users.id, session.user.id))
+        .limit(1)
+      ]);
+
+      allPayments = paymentsData;
+      const myCards = cardsData;
+      const cardSumStats = sumStatsData;
+      const transferInStats = transferInData;
+      const [monthlyIncome] = incomeData;
+      const [dbUser] = userData;
+
+      if (dbUser?.name) userName = dbUser.name;
+      else if (dbUser?.email) userName = dbUser.email;
 
       const cardBalances: Record<number, number> = {};
       myCards.forEach(c => {
@@ -145,15 +179,6 @@ export default async function Home() {
 
     } catch (e) {
       console.error("Dashboard query error:", e);
-    }
-  }
-
-  let userName = session?.user?.name || session?.user?.email || 'Гость';
-  
-  if (session?.user?.id) {
-    const [dbUser] = await db.select({ name: users.name }).from(users).where(eq(users.id, session.user.id)).limit(1);
-    if (dbUser?.name) {
-      userName = dbUser.name;
     }
   }
 
@@ -254,8 +279,28 @@ export default async function Home() {
                 </div>
 
                 {userCardsWithBalances.length === 0 ? (
-                  <div className={css({ py: "32px", textAlign: "center", color: "secondaryText", bg: "var(--card-bg)", borderRadius: "24px", border: "1px dashed #cbd5e1", fontSize: "14px" })}>
-                    У вас пока нет добавленных карт. Добавьте в разделе "Управлять".
+                  <div className={stack({ 
+                    py: "48px", 
+                    px: "24px",
+                    textAlign: "center", 
+                    bg: "var(--card-bg)", 
+                    borderRadius: "28px", 
+                    border: "2px dashed var(--border-color)",
+                    gap: "20px",
+                    align: "center"
+                  })}>
+                    <div className={css({ w: "64px", h: "64px", bg: "var(--surface-secondary)", borderRadius: "22px", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--secondary-text)" })}>
+                      <CreditCard size={32} strokeWidth={1.5} />
+                    </div>
+                    <div className={stack({ gap: "4px" })}>
+                      <p className={css({ fontSize: "17px", fontWeight: "800", color: "var(--foreground)" })}>Нет активных карт</p>
+                      <p className={css({ fontSize: "14px", color: "var(--secondary-text)", fontWeight: "500", maxWidth: "220px" })}>
+                        Добавьте первую карту, чтобы начать учитывать кешбэк и траты
+                      </p>
+                    </div>
+                    <Link href="/cards" className="sber-button" style={{ width: "auto", padding: "12px 24px", fontSize: "15px", borderRadius: "14px" }}>
+                       + Добавить карту
+                    </Link>
                   </div>
                 ) : (
                   <div className="sber-card" style={{ padding: "8px 16px" }}>

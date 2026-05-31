@@ -7,6 +7,7 @@ import { eq, desc, and, gte, lte, inArray, asc, aliasedTable } from "drizzle-orm
 import { redirect } from "next/navigation";
 import { ArrowLeft, PlusCircle } from "lucide-react";
 import TransactionsList from "@/components/TransactionsList";
+import { getSpendingCategoryOptions } from "@/lib/actions/spending-categories";
 
 export const dynamic = "force-dynamic";
 
@@ -30,18 +31,27 @@ export default async function TransactionsPage({
   const bankIds = getArrayParam(params.bankId);
   const cardIds = getArrayParam(params.cardId);
 
-  // Fetch options for filters
-  const myCards = await db
-    .select({
-      id: userCards.id,
-      cardName: bankCards.name,
-      bankName: banks.name,
-      bankId: banks.id
-    })
-    .from(userCards)
-    .innerJoin(bankCards, eq(userCards.bankCardId, bankCards.id))
-    .innerJoin(banks, eq(bankCards.bankId, banks.id))
-    .where(eq(userCards.userId, session.user.id!));
+  // 1. Parallelize initial data fetching for filters
+  const [myCards, spendingCategoryOptions] = await Promise.all([
+    db
+      .select({
+        id: userCards.id,
+        cardName: bankCards.name,
+        bankName: banks.name,
+        bankId: banks.id,
+        accountType: userCards.accountType
+      })
+      .from(userCards)
+      .innerJoin(bankCards, eq(userCards.bankCardId, bankCards.id))
+      .innerJoin(banks, eq(bankCards.bankId, banks.id))
+      .where(
+        and(
+          eq(userCards.userId, session.user.id!),
+          inArray(userCards.accountType, ["debit", "credit"])
+        )
+      ),
+    getSpendingCategoryOptions()
+  ]);
 
   const uniqueBanks = Array.from(new Map(myCards.map(c => [c.bankId, { id: c.bankId, name: c.bankName }])).values());
 
@@ -109,7 +119,8 @@ export default async function TransactionsPage({
     .leftJoin(spendingCategories, eq(transactions.spendingCategoryId, spendingCategories.id))
     .leftJoin(merchants, eq(transactions.merchantName, merchants.name))
     .where(and(...conditions))
-    .orderBy(desc(transactions.transactionDate));
+    .orderBy(desc(transactions.transactionDate))
+    .limit(50);
 
   const allSplits = await db
     .select({

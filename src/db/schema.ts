@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, real, primaryKey } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, primaryKey, index } from "drizzle-orm/sqlite-core";
 import type { AdapterAccountType } from "next-auth/adapters";
 
 export const users = sqliteTable("users", {
@@ -12,7 +12,9 @@ export const users = sqliteTable("users", {
   image: text("image"),
   role: text("role").default("user").notNull().$defaultFn(() => "user"),
   createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
-});
+}, (table) => ({
+  emailIdx: index("users_email_idx").on(table.email),
+}));
 
 export const accounts = sqliteTable(
   "accounts",
@@ -35,6 +37,7 @@ export const accounts = sqliteTable(
     compoundKey: primaryKey({
       columns: [account.provider, account.providerAccountId],
     }),
+    userIdIdx: index("accounts_user_id_idx").on(account.userId),
   })
 );
 
@@ -44,7 +47,9 @@ export const sessions = sqliteTable("sessions", {
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
   expires: integer("expires", { mode: "timestamp_ms" }).notNull(),
-});
+}, (table) => ({
+  userIdIdx: index("sessions_user_id_idx").on(table.userId),
+}));
 
 export const verificationTokens = sqliteTable(
   "verification_tokens",
@@ -71,7 +76,9 @@ export const loyaltyPrograms = sqliteTable("loyalty_programs", {
   name: text("name").notNull(),
   description: text("description"),
   roundingType: text("rounding_type").default("no_rounding").notNull(),
-});
+}, (table) => ({
+  bankIdIdx: index("loyalty_programs_bank_id_idx").on(table.bankId),
+}));
 
 export const bankCards = sqliteTable("bank_cards", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -81,7 +88,10 @@ export const bankCards = sqliteTable("bank_cards", {
   isArchived: integer("is_archived", { mode: "boolean" }).default(false),
   loyaltyProgramId: integer("loyalty_program_id").references(() => loyaltyPrograms.id),
   accountType: text("account_type").default("debit").notNull(),
-});
+}, (table) => ({
+  bankIdIdx: index("bank_cards_bank_id_idx").on(table.bankId),
+  lpIdIdx: index("bank_cards_lp_id_idx").on(table.loyaltyProgramId),
+}));
 
 // New table for historical settings of loyalty programs (rounding, etc.)
 export const loyaltyProgramSettings = sqliteTable("loyalty_program_settings", {
@@ -89,7 +99,9 @@ export const loyaltyProgramSettings = sqliteTable("loyalty_program_settings", {
   loyaltyProgramId: integer("loyalty_program_id").references(() => loyaltyPrograms.id).notNull(),
   roundingType: text("rounding_type").notNull(),
   startDate: text("start_date").notNull(), // ISO Date YYYY-MM-DD
-});
+}, (table) => ({
+  lpIdIdx: index("lp_settings_lp_id_idx").on(table.loyaltyProgramId),
+}));
 
 export const userCards = sqliteTable("user_cards", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -102,7 +114,10 @@ export const userCards = sqliteTable("user_cards", {
   creditLimit: real("credit_limit"),
   statementDay: integer("statement_day"),
   paymentDay: integer("payment_day"),
-});
+}, (table) => ({
+  userIdIdx: index("user_cards_user_id_idx").on(table.userId),
+  bankCardIdIdx: index("user_cards_bank_card_id_idx").on(table.bankCardId),
+}));
 
 export const mccCodes = sqliteTable("mcc_codes", {
   code: text("code").primaryKey(),
@@ -120,7 +135,9 @@ export const bankCategories = sqliteTable("bank_categories", {
   startDate: text("start_date").default("2000-01-01").notNull(),
   endDate: text("end_date"),
   cashbackLimit: real("cashback_limit"),
-});
+}, (table) => ({
+  lpIdIdx: index("bank_categories_lp_id_idx").on(table.loyaltyProgramId),
+}));
 
 export const bankCategoryMcc = sqliteTable("bank_category_mcc", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -128,7 +145,10 @@ export const bankCategoryMcc = sqliteTable("bank_category_mcc", {
   mccCode: text("mcc_code").references(() => mccCodes.code).notNull(),
   startDate: text("start_date").default("2000-01-01").notNull(),
   endDate: text("end_date"),
-});
+}, (table) => ({
+  categoryIdIdx: index("bank_category_mcc_cat_id_idx").on(table.categoryId),
+  mccCodeIdx: index("bank_category_mcc_code_idx").on(table.mccCode),
+}));
 
 export const bankCategoryMerchant = sqliteTable("bank_category_merchant", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -136,7 +156,10 @@ export const bankCategoryMerchant = sqliteTable("bank_category_merchant", {
   merchantId: integer("merchant_id").references(() => merchants.id).notNull(),
   startDate: text("start_date").default("2000-01-01").notNull(),
   endDate: text("end_date"),
-});
+}, (table) => ({
+  categoryIdIdx: index("bank_category_merchant_cat_id_idx").on(table.categoryId),
+  merchantIdIdx: index("bank_category_merchant_merch_id_idx").on(table.merchantId),
+}));
 
 export const merchants = sqliteTable("merchants", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -147,20 +170,27 @@ export const merchants = sqliteTable("merchants", {
   website: text("website"),
   categoryName: text("category_name"),
   spendingCategoryId: integer("spending_category_id").references(() => spendingCategories.id),
-});
+}, (table) => ({
+  nameIdx: index("merchants_name_idx").on(table.name),
+  mccIdx: index("merchants_mcc_idx").on(table.mainMcc),
+}));
 
 export const spendingCategories = sqliteTable("spending_categories", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(),
   parentId: integer("parent_id").references((): any => spendingCategories.id),
   sortOrder: integer("sort_order").default(0).notNull(),
-});
+}, (table) => ({
+  parentIdIdx: index("spending_categories_parent_id_idx").on(table.parentId),
+}));
 
 export const bankExclusions = sqliteTable("bank_exclusions", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   bankCardId: integer("bank_card_id").references(() => bankCards.id).notNull(),
   mccCode: text("mcc_code").references(() => mccCodes.code).notNull(),
-});
+}, (table) => ({
+  bankCardIdIdx: index("bank_exclusions_card_id_idx").on(table.bankCardId),
+}));
 
 export const userCashbackRules = sqliteTable("user_cashback_rules", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -173,7 +203,11 @@ export const userCashbackRules = sqliteTable("user_cashback_rules", {
   startDate: text("start_date").notNull(),
   endDate: text("end_date").notNull(),
   cashbackLimit: real("cashback_limit"),
-});
+}, (table) => ({
+  userIdIdx: index("user_rules_user_id_idx").on(table.userId),
+  lpIdIdx: index("user_rules_lp_id_idx").on(table.loyaltyProgramId),
+  dateRangeIdx: index("user_rules_dates_idx").on(table.startDate, table.endDate),
+}));
 
 
 export const transactions = sqliteTable("transactions", {
@@ -193,7 +227,12 @@ export const transactions = sqliteTable("transactions", {
   categoryId: integer("category_id").references(() => bankCategories.id),
   customCategoryName: text("custom_category_name"),
   spendingCategoryId: integer("spending_category_id").references(() => spendingCategories.id),
-});
+}, (table) => ({
+  userIdIdx: index("transactions_user_id_idx").on(table.userId),
+  userCardIdIdx: index("transactions_user_card_id_idx").on(table.userCardId),
+  dateIdx: index("transactions_date_idx").on(table.transactionDate),
+  merchantIdx: index("transactions_merchant_idx").on(table.merchantName),
+}));
 
 export const transactionTemplates = sqliteTable("transaction_templates", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -204,14 +243,18 @@ export const transactionTemplates = sqliteTable("transaction_templates", {
   mccCode: text("mcc_code").references(() => mccCodes.code),
   userCardId: integer("user_card_id").references(() => userCards.id, { onDelete: "cascade" }),
   spendingCategoryId: integer("spending_category_id").references(() => spendingCategories.id),
-});
+}, (table) => ({
+  userIdIdx: index("templates_user_id_idx").on(table.userId),
+}));
 
 export const transactionCategorySplits = sqliteTable("transaction_category_splits", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   transactionId: integer("transaction_id").references(() => transactions.id, { onDelete: "cascade" }).notNull(),
   spendingCategoryId: integer("spending_category_id").references(() => spendingCategories.id).notNull(),
   amount: real("amount").notNull(),
-});
+}, (table) => ({
+  txIdIdx: index("tx_splits_tx_id_idx").on(table.transactionId),
+}));
 
 export const creditPayments = sqliteTable("credit_payments", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -222,4 +265,8 @@ export const creditPayments = sqliteTable("credit_payments", {
   paymentType: text("payment_type").default("minimal").notNull(), // 'minimal', 'full'
   isPaid: integer("is_paid", { mode: "boolean" }).default(false).notNull(),
   note: text("note"),
-});
+}, (table) => ({
+  userIdIdx: index("credit_payments_user_id_idx").on(table.userId),
+  dueDateIdx: index("credit_payments_due_date_idx").on(table.dueDate),
+}));
+

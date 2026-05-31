@@ -3,11 +3,11 @@ import { spendingCategories } from "@/db/schema";
 import { auth } from "@/auth";
 import { css } from "../../../../../styled-system/css";
 import { stack, flex } from "../../../../../styled-system/patterns";
-import { ArrowLeft, Plus, Trash2, Edit2, ChevronRight, ChevronDown, Tag } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { redirect } from "next/navigation";
-import { createSpendingCategory, deleteSpendingCategory, updateSpendingCategory, getSpendingCategoryOptions } from "@/lib/actions/spending-categories";
-import SearchableSelect from "@/components/SearchableSelect";
+import { getSpendingCategoryOptions } from "@/lib/actions/spending-categories";
 import CategoryTree from "@/components/admin/CategoryTree";
+import AddSpendingCategoryModal from "@/components/admin/AddSpendingCategoryModal";
 
 export const dynamic = "force-dynamic";
 
@@ -51,46 +51,24 @@ export default async function SpendingCategoriesAdminPage() {
 
   return (
     <div className={stack({ gap: "32px" })}>
-      <header className={flex({ align: "center", gap: "16px" })}>
-        <a href="/admin/recalculate" className="sber-icon-button" style={{ flexShrink: 0 }}>
-          <ArrowLeft size={20} />
-        </a>
-        <div className={stack({ gap: "4px" })}>
-          <h1 className={css({ fontSize: "24px", fontWeight: "800", color: "var(--foreground)" })}>Глобальные категории</h1>
-          <p className={css({ fontSize: "14px", color: "var(--secondary-text)" })}>Настройка иерархии категорий для всех пользователей</p>
+      <header className={flex({ justify: "space-between", align: "center", gap: "16px" })}>
+        <div className={flex({ align: "center", gap: "16px" })}>
+            <a href="/profile" className="sber-icon-button" style={{ flexShrink: 0 }}>
+            <ArrowLeft size={20} />
+            </a>
+            <div className={stack({ gap: "4px" })}>
+            <h1 className={css({ fontSize: "24px", fontWeight: "800", color: "var(--foreground)" })}>Категории трат</h1>
+            <p className={css({ fontSize: "14px", color: "var(--secondary-text)" })}>Иерархия категорий расходов</p>
+            </div>
         </div>
+        <AddSpendingCategoryModal parentOptions={parentOptions} />
       </header>
 
-      <div className={css({ display: "grid", gridTemplateColumns: { base: "1fr", lg: "1fr 400px" }, gap: "40px", alignItems: "start" })}>
-        
-        {/* Список категорий */}
-        <section className="sber-card">
-          <h2 className="sber-label" style={{ marginBottom: "20px" }}>СТРУКТУРА КАТЕГОРИЙ</h2>
-          <CategoryTree tree={tree} />
-        </section>
-
-        {/* Форма создания */}
-        <section className="sber-card">
-          <h2 className="sber-label" style={{ marginBottom: "20px" }}>НОВАЯ КАТЕГОРИЯ</h2>
-          <form action={createSpendingCategory} className={stack({ gap: "20px" })}>
-            <div className={stack({ gap: "8px" })}>
-              <label className="sber-label">НАЗВАНИЕ</label>
-              <input name="name" type="text" required placeholder="Напр: Продукты" className="sber-input" />
-            </div>
-            <div className={stack({ gap: "8px" })}>
-              <label className="sber-label">РОДИТЕЛЬСКАЯ КАТЕГОРИЯ</label>
-              <SearchableSelect 
-                name="parentId"
-                options={parentOptions}
-                placeholder="Верхний уровень"
-              />
-            </div>
-            <button type="submit" className="sber-button">
-              <Plus size={18} /> Добавить категорию
-            </button>
-          </form>
-        </section>
-      </div>
+      {/* Список категорий */}
+      <section className="sber-card">
+        <h2 className="sber-label" style={{ marginBottom: "20px" }}>СТРУКТУРА КАТЕГОРИЙ</h2>
+        <CategoryTree tree={tree} />
+      </section>
     </div>
   );
 }

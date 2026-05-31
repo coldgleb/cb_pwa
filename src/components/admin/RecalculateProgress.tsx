@@ -9,7 +9,6 @@ import { getAllUserCards, recalculateTransactionsForUserCard } from "@/lib/actio
 interface CardTask {
   id: number;
   userName: string | null;
-  userEmail: string;
   cardName: string;
   bankName: string;
   txCount: number;
@@ -49,8 +48,16 @@ export default function RecalculateProgress() {
     addLog("Загрузка списка карт и транзакций...");
 
     try {
-      const allCards = await getAllUserCards();
-      const total = allCards.reduce((sum, card) => sum + (card.txCount || 0), 0);
+      const allCardsRaw = await getAllUserCards();
+      const allCards: CardTask[] = allCardsRaw.map(c => ({
+        id: c.id,
+        userName: c.userName || "Пользователь",
+        cardName: c.cardName,
+        bankName: c.bankName,
+        txCount: c.txCount
+      }));
+
+      const total = allCards.reduce((sum: number, card: CardTask) => sum + (card.txCount || 0), 0);
       setTotalTx(total);
       
       addLog(`Найдено карт: ${allCards.length}. Всего операций: ${total}`);
@@ -64,7 +71,7 @@ export default function RecalculateProgress() {
 
       for (let i = 0; i < allCards.length; i++) {
         const card = allCards[i];
-        const cardDesc = `${card.userName || card.userEmail} — ${card.bankName} ${card.cardName}`;
+        const cardDesc = `${card.userName} — ${card.bankName} ${card.cardName}`;
         
         addLog(`Обработка: ${cardDesc} (${card.txCount} транз.)...`);
         
@@ -75,8 +82,6 @@ export default function RecalculateProgress() {
           addLog(`Успешно: ${cardDesc} (${count} транз.)`, "success");
         } catch (error) {
           addLog(`Ошибка при обработке ${cardDesc}: ${error instanceof Error ? error.message : "Неизвестная ошибка"}`, "error");
-          // Even on error, we count those transactions as "attempted/processed" for the progress bar
-          // to avoid it jumping or never reaching 100%
           currentProcessed += card.txCount;
           setProcessedTx(currentProcessed);
         }

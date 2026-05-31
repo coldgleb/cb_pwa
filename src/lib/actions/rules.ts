@@ -115,18 +115,18 @@ export async function saveMonthlyRules(formData: FormData) {
       )
     );
 
-  // 5. Perform optimized recalculation for each card
-  for (const card of cards) {
+  // 5. Perform optimized recalculation for each card in parallel
+  await Promise.all(cards.map(async (card) => {
     const [userCard] = await db.select({ limit: userCards.cashbackLimit }).from(userCards).where(eq(userCards.id, card.id)).limit(1);
     
     if (userCard?.limit !== null) {
-        // Recalculate ALL for this month (using the super-fast bulk engine)
+        // Recalculate ALL for this month
         await bulkRecalculateTransactions(card.id, startDate, endDate);
     } else if (affectedCategoryIds.length > 0) {
-        // Recalculate ONLY affected categories (using the super-fast bulk engine)
+        // Recalculate ONLY affected categories
         await bulkRecalculateTransactions(card.id, startDate, endDate, affectedCategoryIds);
     }
-  }
+  }));
 
   revalidatePath("/cards");
   revalidatePath(`/cards/loyalty-programs/${loyaltyProgramId}`);
@@ -208,9 +208,9 @@ export async function copyRulesFromPreviousMonth(loyaltyProgramId: number, targe
       )
     );
 
-  for (const card of cards) {
-    await recalculateTransactionsForUserCard(card.id, targetStartDate, targetEndDate);
-  }
+  await Promise.all(cards.map(card => 
+    recalculateTransactionsForUserCard(card.id, targetStartDate, targetEndDate)
+  ));
   
   revalidatePath("/cards");
   revalidatePath(`/cards/loyalty-programs/${loyaltyProgramId}`);

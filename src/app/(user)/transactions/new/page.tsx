@@ -3,7 +3,7 @@ import { userCards, bankCards, banks, mccCodes, merchants } from "@/db/schema";
 import { auth } from "@/auth";
 import { css } from "../../../../../styled-system/css";
 import { container, flex, stack } from "../../../../../styled-system/patterns";
-import { eq, asc } from "drizzle-orm";
+import { eq, asc, inArray, and } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import TransactionForm from "@/components/TransactionForm";
@@ -26,7 +26,12 @@ export default async function NewTransactionPage() {
     .from(userCards)
     .innerJoin(bankCards, eq(userCards.bankCardId, bankCards.id))
     .innerJoin(banks, eq(bankCards.bankId, banks.id))
-    .where(eq(userCards.userId, session.user.id!));
+    .where(
+      and(
+        eq(userCards.userId, session.user.id!),
+        inArray(userCards.accountType, ["debit", "credit"])
+      )
+    );
 
   const allMcc = await db.select().from(mccCodes).orderBy(asc(mccCodes.code));
   const allMerchants = await db.select().from(merchants).orderBy(asc(merchants.name));

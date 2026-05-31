@@ -8,7 +8,7 @@ import { getIconUrl } from "@/lib/utils/icons";
 import ViewModeToggle, { HistoryViewMode } from "../ViewModeToggle";
 import SearchableSelect from "@/components/SearchableSelect";
 import DeleteMerchantButton from "./DeleteMerchantButton";
-import MerchantFormWrapper from "./MerchantFormWrapper";
+import AdminFormWrapper from "./AdminFormWrapper";
 import { updateMerchant, getMerchantMccSuggestions } from "@/lib/actions/merchants";
 import UniversalTable, { ColumnDef } from "../UniversalTable";
 import { Search, Loader2 } from "lucide-react";
@@ -192,7 +192,7 @@ export default function AdminMerchantsList({
             const icon = getIconUrl(merchant);
             return (
               <div key={merchant.id} className="sber-card" style={{ padding: "16px" }}>
-                <MerchantFormWrapper
+                <AdminFormWrapper
                   action={updateMerchant.bind(null, merchant.id)}
                   successMessage="Данные мерчанта обновлены"
                   className={stack({ gap: "16px" })}
@@ -288,7 +288,7 @@ export default function AdminMerchantsList({
                       className={css({ fontSize: "12px", color: "var(--foreground)", bg: "var(--input-bg)", px: "8px", py: "4px", borderRadius: "8px", border: "none", width: "full", _focus: { outline: "none", ring: "1px solid gray" } })}
                     />
                   </div>
-                </MerchantFormWrapper>
+                </AdminFormWrapper>
 
                 <div className={flex({ justify: "flex-end", mt: "12px" })}>
                   <DeleteMerchantButton merchantId={merchant.id} merchantName={merchant.name} />
@@ -337,7 +337,7 @@ export default function AdminMerchantsList({
               <h2 className={css({ fontSize: "17px", fontWeight: "700", color: "var(--foreground)" })}>Редактировать мерчанта</h2>
             </div>
 
-            <MerchantFormWrapper
+            <AdminFormWrapper
               action={async (formData) => {
                 await updateMerchant(editingMerchant.id, formData);
                 setEditingMerchant(null);
@@ -430,7 +430,7 @@ export default function AdminMerchantsList({
               <button type="submit" className="sber-button">
                 Сохранить изменения
               </button>
-            </MerchantFormWrapper>
+            </AdminFormWrapper>
           </div>
         </div>
       )}

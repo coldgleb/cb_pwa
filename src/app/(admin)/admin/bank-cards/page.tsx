@@ -1,12 +1,12 @@
 import { db } from "@/db";
 import { banks, bankCards, loyaltyPrograms } from "@/db/schema";
-import { createBankCard } from "@/lib/actions/bank-cards";
 import { css } from "../../../../../styled-system/css";
 import { stack, flex } from "../../../../../styled-system/patterns";
 import { eq, asc } from "drizzle-orm";
-import { Plus, Landmark } from "lucide-react";
-import SearchableSelect from "@/components/SearchableSelect";
 import AdminBankCardsList from "@/components/admin/AdminBankCardsList";
+import AddBankCardModal from "@/components/admin/AddBankCardModal";
+import { ArrowLeft } from "lucide-react";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
@@ -46,75 +46,18 @@ export default async function AdminBankCardsPage() {
 
   return (
     <div className={stack({ gap: "32px" })}>
-      <h1 className={css({ fontSize: "24px", fontWeight: "800", color: "var(--foreground)" })}>Типы карт</h1>
-
-      {/* Форма добавления */}
-      <section className="sber-card">
-        <div className={flex({ align: "center", gap: "10px", mb: "24px" })}>
-          <div className={css({ p: "6px", bg: "sberGreen", borderRadius: "8px", color: "white" })}>
-            <Plus size={18} />
-          </div>
-          <h2 className={css({ fontSize: "17px", fontWeight: "700", color: "var(--foreground)" })}>Добавить тип карты</h2>
+      <header className={flex({ justify: "space-between", align: "center", gap: "16px" })}>
+        <div className={flex({ align: "center", gap: "16px" })}>
+            <Link href="/profile" className="sber-icon-button">
+                <ArrowLeft size={20} />
+            </Link>
+            <h1 className={css({ fontSize: "24px", fontWeight: "800", color: "var(--foreground)" })}>Виды карт</h1>
         </div>
-
-        <form action={createBankCard} className={stack({ gap: "20px" })}>
-          <div className={stack({ gap: "6px" })}>
-            <label className="sber-label">БАНК-ЭМИТЕНТ</label>
-            <SearchableSelect 
-              name="bankId" 
-              options={bankOptions}
-              required
-              placeholder="Выберите банк..."
-            />
-          </div>
-          <div className={stack({ gap: "6px" })}>
-            <label className="sber-label">НАЗВАНИЕ КАРТЫ</label>
-            <input
-              name="name"
-              type="text"
-              required
-              placeholder="Например, Tinkoff Black"
-              className="sber-input"
-            />
-          </div>
-          <div className={stack({ gap: "6px" })}>
-            <label className="sber-label">ПРОГРАММА ЛОЯЛЬНОСТИ</label>
-            <SearchableSelect 
-              name="loyaltyProgramId" 
-              options={[{ value: "", label: "Без программы лояльности" }, ...loyaltyProgramOptions]}
-              placeholder="Выберите программу лояльности..."
-            />
-          </div>
-          <div className={stack({ gap: "6px" })}>
-            <label className="sber-label">ТИП СЧЕТА</label>
-            <SearchableSelect 
-              name="accountType" 
-              options={[
-                { value: "debit", label: "Дебетовая карта" },
-                { value: "credit", label: "Кредитная карта" },
-                { value: "cardless", label: "Счет без карты" },
-                { value: "investments", label: "Инвестиции" },
-                { value: "bonus", label: "Бонусный счет" },
-              ]}
-              required
-              defaultValue="debit"
-              placeholder="Выберите тип счета..."
-            />
-          </div>
-          <div className={stack({ gap: "6px" })}>
-            <label className="sber-label">ЛИМИТ КЕШБЭКА В МЕСЯЦ (ПО УМОЛЧАНИЮ)</label>
-            <input
-              name="defaultCashbackLimit"
-              type="number"
-              placeholder="Например, 5000"
-              className="sber-input"
-            />
-          </div>
-          <button type="submit" className="sber-button">
-            Сохранить тип карты
-          </button>
-        </form>
-      </section>
+        <AddBankCardModal 
+          bankOptions={bankOptions} 
+          loyaltyProgramOptions={loyaltyProgramOptions} 
+        />
+      </header>
 
       {/* Список типов карт */}
       <section className={stack({ gap: "16px" })}>

@@ -3,7 +3,7 @@ import { banks, bankCards, userCards, loyaltyPrograms, transactions, userCashbac
 import { auth } from "@/auth";
 import { css } from "../../../../styled-system/css";
 import { stack, flex } from "../../../../styled-system/patterns";
-import { eq, asc, and, sql, gte, lte } from "drizzle-orm";
+import { eq, asc, and, sql, gte, lte, inArray } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { ArrowLeft, Check } from "lucide-react";
 import AddCardModalWrapper from "@/components/AddCardModalWrapper";
@@ -24,7 +24,12 @@ export default async function UserCardsPage() {
     accountType: bankCards.accountType,
   })
   .from(bankCards)
-  .where(eq(bankCards.isArchived, false))
+  .where(
+    and(
+      eq(bankCards.isArchived, false),
+      inArray(bankCards.accountType, ["debit", "credit"])
+    )
+  )
   .orderBy(asc(bankCards.name));
 
   const myCardsRaw = await db.select({
@@ -205,7 +210,7 @@ export default async function UserCardsPage() {
           {/* Список карт */}
           <section className={stack({ gap: "16px" })}>
             <h3 className="sber-label">ВАШИ КАРТЫ</h3>
-            <UserCardsList cards={myCards} />
+            <UserCardsList cards={myCards} banks={allBanks} cardTypes={availableCardTypes} />
           </section>
         </div>
       </div>

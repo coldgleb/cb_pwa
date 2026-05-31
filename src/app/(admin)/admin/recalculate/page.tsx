@@ -1,29 +1,20 @@
 import RecalculateProgress from "@/components/admin/RecalculateProgress";
 import { css } from "../../../../../styled-system/css";
-import { stack } from "../../../../../styled-system/patterns";
+import { stack, flex } from "../../../../../styled-system/patterns";
+import { ArrowLeft } from "lucide-react";
+import Link from "next/link";
 
 export default function RecalculatePage() {
   return (
     <div className={stack({ gap: "32px" })}>
-      <header className={stack({ gap: "8px" })}>
-        <div className={css({ 
-          display: "inline-flex", 
-          px: "8px", 
-          py: "2px", 
-          bg: "rgba(33, 160, 56, 0.1)", 
-          color: "var(--sber-green)", 
-          borderRadius: "6px", 
-          fontSize: "10px", 
-          fontWeight: "800",
-          textTransform: "uppercase",
-          letterSpacing: "0.05em",
-          width: "fit-content"
-        })}>
-          Администрирование
+      <header className={flex({ align: "center", gap: "16px" })}>
+        <Link href="/profile" className="sber-icon-button">
+          <ArrowLeft size={20} />
+        </Link>
+        <div className={stack({ gap: "0" })}>
+          <h1 className={css({ fontSize: "24px", fontWeight: "800", color: "var(--foreground)" })}>Глобальный пересчет</h1>
+          <p className={css({ fontSize: "14px", color: "var(--secondary-text)" })}>Обновление транзакций по новым правилам</p>
         </div>
-        <h1 className={css({ fontSize: "28px", fontWeight: "900", color: "var(--foreground)" })}>
-          Пересчет операций
-        </h1>
       </header>
 
       <RecalculateProgress />

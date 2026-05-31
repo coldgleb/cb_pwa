@@ -11,6 +11,7 @@
   --border-color: #e2e8f0;
   --surface-secondary: #f8fafc;
   --separator: rgba(0,0,0,0.1);
+  --error: #ef4444;
 }
 
 .dark {
@@ -22,6 +23,10 @@
   --border-color: #38383a;
   --surface-secondary: #2c2c2e;
   --separator: rgba(255,255,255,0.1);
+  /* Brighter green for better contrast in dark mode */
+  --sber-green: #34c759;
+  --sber-green-hover: #2db350;
+  --error: #ff453a;
 }
 
 html {
@@ -131,19 +136,28 @@ a {
   display: flex;
   align-items: center;
   justify-content: center;
-  shadow: 0 2px 8px rgba(0,0,0,0.1);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
   border: 1px solid var(--border-color);
   cursor: pointer;
   color: var(--secondary-text);
 }
 
 .sber-label {
-  font-size: 13px;
-  font-weight: 800;
+  font-size: 14px;
+  font-weight: 600;
   color: var(--secondary-text);
   margin-left: 4px;
+  margin-bottom: 2px;
+  display: block;
+}
+
+.sber-badge {
+  font-size: 11px;
+  font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.05em;
+  padding: 4px 8px;
+  border-radius: 6px;
 }
 
 /* Убираем стрелки (спиннеры) у числовых полей */

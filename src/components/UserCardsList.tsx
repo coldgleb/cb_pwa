@@ -3,10 +3,11 @@
 import { useState, useEffect } from "react";
 import { css } from "../../styled-system/css";
 import { stack, flex } from "../../styled-system/patterns";
-import { Landmark, ChevronRight, Edit2 } from "lucide-react";
+import { Landmark, ChevronRight, Edit2, CreditCard, Plus } from "lucide-react";
 import { getIconUrl } from "@/lib/utils/icons";
 import ViewModeToggle, { HistoryViewMode } from "./ViewModeToggle";
 import UniversalTable, { ColumnDef } from "./UniversalTable";
+import AddCardModalWrapper from "./AddCardModalWrapper";
 
 interface UserCard {
   id: number;
@@ -23,6 +24,8 @@ interface UserCard {
 
 interface UserCardsListProps {
   cards: UserCard[];
+  banks?: any[];
+  cardTypes?: any[];
 }
 
 const getAccountTypeLabel = (type: string) => {
@@ -55,7 +58,7 @@ const getAccountTypeColor = (type: string) => {
   }
 };
 
-export default function UserCardsList({ cards }: UserCardsListProps) {
+export default function UserCardsList({ cards, banks, cardTypes }: UserCardsListProps) {
   const [viewMode, setViewMode] = useState<HistoryViewMode>("cards");
   const [mounted, setMounted] = useState(false);
 
@@ -186,8 +189,28 @@ export default function UserCardsList({ cards }: UserCardsListProps) {
 
   if (cards.length === 0) {
     return (
-      <div className={css({ py: "40px", textAlign: "center", color: "secondaryText", bg: "var(--card-bg)", borderRadius: "24px", border: "1px dashed", borderColor: "#e2e8f0", fontSize: "14px" })}>
-        Пока нет добавленных карт
+      <div className={stack({ 
+        py: "64px", 
+        px: "24px",
+        textAlign: "center", 
+        bg: "var(--card-bg)", 
+        borderRadius: "28px", 
+        border: "2px dashed var(--border-color)",
+        gap: "20px",
+        align: "center"
+      })}>
+        <div className={css({ w: "64px", h: "64px", bg: "var(--surface-secondary)", borderRadius: "22px", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--secondary-text)" })}>
+          <CreditCard size={32} strokeWidth={1.5} />
+        </div>
+        <div className={stack({ gap: "4px" })}>
+          <p className={css({ fontSize: "17px", fontWeight: "800", color: "var(--foreground)" })}>Ваш кошелек пуст</p>
+          <p className={css({ fontSize: "14px", color: "var(--secondary-text)", fontWeight: "500", maxWidth: "260px" })}>
+            Добавьте свою первую карту или счет, чтобы начать отслеживать финансы
+          </p>
+        </div>
+        {banks && cardTypes && (
+          <AddCardModalWrapper banks={banks} cardTypes={cardTypes} />
+        )}
       </div>
     );
   }
