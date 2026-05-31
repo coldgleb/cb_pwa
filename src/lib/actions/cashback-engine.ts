@@ -2,7 +2,6 @@
 
 import { db } from "@/db";
 import { 
-  bankCardSettings, 
   bankCards, 
   transactions, 
   userCards, 
@@ -13,7 +12,9 @@ import {
   userCashbackRules, 
   bankExclusions,
   users,
-  banks
+  banks,
+  loyaltyPrograms,
+  loyaltyProgramSettings
 } from "@/db/schema";
 import { and, eq, lte, gte, sql, desc, or, isNull, inArray, asc } from "drizzle-orm";
 
@@ -38,18 +39,19 @@ export async function bulkRecalculateTransactions(
 ) {
   console.time("BulkRecalc");
 
-  // 1. Fetch UserCard and Bank info
+  // 1. Fetch UserCard, Bank and Loyalty Program info
   const [cardInfo] = await db
     .select({ 
       bankCardId: userCards.bankCardId,
       userId: userCards.userId,
       globalLimit: userCards.cashbackLimit,
       bankId: bankCards.bankId,
-      baseRounding: bankCards.roundingType,
       loyaltyProgramId: bankCards.loyaltyProgramId,
+      programRounding: loyaltyPrograms.roundingType,
     })
     .from(userCards)
     .innerJoin(bankCards, eq(userCards.bankCardId, bankCards.id))
+    .leftJoin(loyaltyPrograms, eq(bankCards.loyaltyProgramId, loyaltyPrograms.id))
     .where(eq(userCards.id, userCardId))
     .limit(1);
 
@@ -72,7 +74,7 @@ export async function bulkRecalculateTransactions(
     db.select().from(bankCategoryMcc).innerJoin(bankCategories, eq(bankCategoryMcc.categoryId, bankCategories.id)).where(eq(bankCategories.loyaltyProgramId, loyaltyProgramId)),
     db.select().from(bankCategoryMerchant).innerJoin(bankCategories, eq(bankCategoryMerchant.categoryId, bankCategories.id)).where(eq(bankCategories.loyaltyProgramId, loyaltyProgramId)),
     db.select().from(bankExclusions).where(eq(bankExclusions.bankCardId, cardInfo.bankCardId)),
-    db.select().from(bankCardSettings).where(eq(bankCardSettings.bankCardId, cardInfo.bankCardId)).orderBy(desc(bankCardSettings.startDate)),
+    db.select().from(loyaltyProgramSettings).where(eq(loyaltyProgramSettings.loyaltyProgramId, loyaltyProgramId)).orderBy(desc(loyaltyProgramSettings.startDate)),
     db.select().from(userCashbackRules).where(and(eq(userCashbackRules.userId, cardInfo.userId), eq(userCashbackRules.loyaltyProgramId, loyaltyProgramId), lte(userCashbackRules.startDate, endDateStr), gte(userCashbackRules.endDate, startDateStr))),
     db.select().from(merchants)
   ]);
@@ -256,8 +258,12 @@ export async function bulkRecalculateTransactions(
           // F. Rounding
           const histSetting = allHistoricalSettings.find(s => s.startDate <= txDateStr);
           const cardRounding = histSetting?.roundingType || cardInfo.baseRounding || "no_rounding";
+          const programRounding = (cardInfo.programRounding && cardInfo.programRounding !== "no_rounding") 
+            ? cardInfo.programRounding 
+            : cardRounding;
+            
           const categoryRounding = category.roundingType || "inherit";
-          const finalRounding = (categoryRounding === "inherit" || !categoryRounding) ? cardRounding : categoryRounding;
+          const finalRounding = (categoryRounding === "inherit" || !categoryRounding) ? programRounding : categoryRounding;
 
           let calcAmount = paidAmount;
           if (finalRounding === "amount_100_down") calcAmount = Math.floor(paidAmount / 100) * 100;
@@ -339,21 +345,21 @@ export async function calculateCashbackForTransaction(
   excludeTxId?: number
 ) {
   const normalizedMcc = mccCode || "0000";
-
-  // 1. Find the card and bank info
-  const [cardInfo] = await db
-    .select({ 
-      bankCardId: userCards.bankCardId,
-      userId: userCards.userId,
-      globalLimit: userCards.cashbackLimit,
-      bankId: bankCards.bankId,
-      baseRounding: bankCards.roundingType,
-      loyaltyProgramId: bankCards.loyaltyProgramId,
-    })
-    .from(userCards)
-    .innerJoin(bankCards, eq(userCards.bankCardId, bankCards.id))
-    .where(eq(userCards.id, userCardId))
-    .limit(1);
+// 1. Find the card and bank info
+const [cardInfo] = await db
+  .select({ 
+    bankCardId: userCards.bankCardId,
+    userId: userCards.userId,
+    globalLimit: userCards.cashbackLimit,
+    bankId: bankCards.bankId,
+    loyaltyProgramId: bankCards.loyaltyProgramId,
+    programRounding: loyaltyPrograms.roundingType,
+  })
+  .from(userCards)
+  .innerJoin(bankCards, eq(userCards.bankCardId, bankCards.id))
+  .leftJoin(loyaltyPrograms, eq(bankCards.loyaltyProgramId, loyaltyPrograms.id))
+  .where(eq(userCards.id, userCardId))
+  .limit(1);
 
   if (!cardInfo) return { cashback: 0, categoryId: null };
 
@@ -363,18 +369,18 @@ export async function calculateCashbackForTransaction(
   }
 
   const [historicalSetting] = await db
-    .select({ roundingType: bankCardSettings.roundingType })
-    .from(bankCardSettings)
+    .select({ roundingType: loyaltyProgramSettings.roundingType })
+    .from(loyaltyProgramSettings)
     .where(
       and(
-        eq(bankCardSettings.bankCardId, cardInfo.bankCardId),
-        lte(bankCardSettings.startDate, dateStr)
+        eq(loyaltyProgramSettings.loyaltyProgramId, loyaltyProgramId),
+        lte(loyaltyProgramSettings.startDate, dateStr)
       )
     )
-    .orderBy(desc(bankCardSettings.startDate))
+    .orderBy(desc(loyaltyProgramSettings.startDate))
     .limit(1);
 
-  const cardRounding = historicalSetting?.roundingType || cardInfo.baseRounding || "no_rounding";
+  const cardRounding = historicalSetting?.roundingType || cardInfo.programRounding || "no_rounding";
 
   // 2. HIGHEST PRIORITY: Bank Exclusions
   // The table in DB has bank_id, but schema might be out of sync. 
@@ -619,7 +625,10 @@ export async function calculateCashbackForTransaction(
   } catch (e) {}
 
   // 7. Applying Rounding
-  const finalRounding = categoryRounding === "inherit" ? cardRounding : categoryRounding;
+  const programRounding = (cardInfo.programRounding && cardInfo.programRounding !== "no_rounding") 
+    ? cardInfo.programRounding 
+    : cardRounding;
+  const finalRounding = categoryRounding === "inherit" ? programRounding : categoryRounding;
   let finalCalcAmount = paidAmount;
   
   if (finalRounding === "amount_100_down") finalCalcAmount = Math.floor(paidAmount / 100) * 100;

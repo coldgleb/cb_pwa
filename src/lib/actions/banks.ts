@@ -60,7 +60,6 @@ export async function deleteBank(id: number) {
   await db.delete(banks).where(eq(banks.id, id));
 
   revalidatePath("/admin/banks");
-  redirect("/admin/banks");
 }
 
 import { eq } from "drizzle-orm";

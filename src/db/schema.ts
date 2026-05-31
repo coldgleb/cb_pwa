@@ -70,23 +70,23 @@ export const loyaltyPrograms = sqliteTable("loyalty_programs", {
   bankId: integer("bank_id").references(() => banks.id).notNull(),
   name: text("name").notNull(),
   description: text("description"),
+  roundingType: text("rounding_type").default("no_rounding").notNull(),
 });
 
 export const bankCards = sqliteTable("bank_cards", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   bankId: integer("bank_id").references(() => banks.id).notNull(),
   name: text("name").notNull(),
-  roundingType: text("rounding_type").default("no_rounding").notNull(),
   defaultCashbackLimit: real("default_cashback_limit"),
   isArchived: integer("is_archived", { mode: "boolean" }).default(false),
   loyaltyProgramId: integer("loyalty_program_id").references(() => loyaltyPrograms.id),
   accountType: text("account_type").default("debit").notNull(),
 });
 
-// New table for historical settings
-export const bankCardSettings = sqliteTable("bank_card_settings", {
+// New table for historical settings of loyalty programs (rounding, etc.)
+export const loyaltyProgramSettings = sqliteTable("loyalty_program_settings", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  bankCardId: integer("bank_card_id").references(() => bankCards.id).notNull(),
+  loyaltyProgramId: integer("loyalty_program_id").references(() => loyaltyPrograms.id).notNull(),
   roundingType: text("rounding_type").notNull(),
   startDate: text("start_date").notNull(), // ISO Date YYYY-MM-DD
 });
@@ -100,6 +100,8 @@ export const userCards = sqliteTable("user_cards", {
   initialBalance: real("initial_balance").default(0).notNull(),
   accountType: text("account_type").default("debit").notNull(),
   creditLimit: real("credit_limit"),
+  statementDay: integer("statement_day"),
+  paymentDay: integer("payment_day"),
 });
 
 export const mccCodes = sqliteTable("mcc_codes", {
@@ -177,8 +179,8 @@ export const userCashbackRules = sqliteTable("user_cashback_rules", {
 export const transactions = sqliteTable("transactions", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   userId: text("user_id").references(() => users.id).notNull(),
-  userCardId: integer("user_card_id").references(() => userCards.id).notNull(),
-  toUserCardId: integer("to_user_card_id").references(() => userCards.id),
+  userCardId: integer("user_card_id").references(() => userCards.id, { onDelete: "cascade" }).notNull(),
+  toUserCardId: integer("to_user_card_id").references(() => userCards.id, { onDelete: "cascade" }),
   type: text("type").default("expense").notNull(), // 'expense', 'income', 'transfer'
   amount: real("amount").notNull(),
   paidAmount: real("paid_amount"),
@@ -200,7 +202,7 @@ export const transactionTemplates = sqliteTable("transaction_templates", {
   amount: real("amount").notNull(),
   merchantName: text("merchant_name").notNull(),
   mccCode: text("mcc_code").references(() => mccCodes.code),
-  userCardId: integer("user_card_id").references(() => userCards.id),
+  userCardId: integer("user_card_id").references(() => userCards.id, { onDelete: "cascade" }),
   spendingCategoryId: integer("spending_category_id").references(() => spendingCategories.id),
 });
 
@@ -209,4 +211,15 @@ export const transactionCategorySplits = sqliteTable("transaction_category_split
   transactionId: integer("transaction_id").references(() => transactions.id, { onDelete: "cascade" }).notNull(),
   spendingCategoryId: integer("spending_category_id").references(() => spendingCategories.id).notNull(),
   amount: real("amount").notNull(),
+});
+
+export const creditPayments = sqliteTable("credit_payments", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: text("user_id").references(() => users.id).notNull(),
+  userCardId: integer("user_card_id").references(() => userCards.id, { onDelete: "cascade" }).notNull(),
+  amount: real("amount").notNull(),
+  dueDate: integer("due_date", { mode: "timestamp" }).notNull(),
+  paymentType: text("payment_type").default("minimal").notNull(), // 'minimal', 'full'
+  isPaid: integer("is_paid", { mode: "boolean" }).default(false).notNull(),
+  note: text("note"),
 });

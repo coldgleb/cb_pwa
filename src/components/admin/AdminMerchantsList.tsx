@@ -9,8 +9,9 @@ import ViewModeToggle, { HistoryViewMode } from "../ViewModeToggle";
 import SearchableSelect from "@/components/SearchableSelect";
 import DeleteMerchantButton from "./DeleteMerchantButton";
 import MerchantFormWrapper from "./MerchantFormWrapper";
-import { updateMerchant } from "@/lib/actions/merchants";
+import { updateMerchant, getMerchantMccSuggestions } from "@/lib/actions/merchants";
 import UniversalTable, { ColumnDef } from "../UniversalTable";
+import { Search, Loader2 } from "lucide-react";
 
 interface Merchant {
   id: number;
@@ -36,6 +37,11 @@ export default function AdminMerchantsList({
   const [viewMode, setViewMode] = useState<HistoryViewMode>("cards");
   const [mounted, setMounted] = useState(false);
   const [editingMerchant, setEditingMerchant] = useState<Merchant | null>(null);
+  const [isSearching, setIsSearching] = useState<number | string | null>(null);
+  
+  // Track manual overrides for MCC fields to support auto-fill
+  const [mccOverrides, setMccOverrides] = useState<Record<number, { mainMcc?: string, additionalMccs?: string }>>({});
+  const [modalMccOverride, setModalMccOverride] = useState<{ mainMcc?: string, additionalMccs?: string } | null>(null);
 
   useEffect(() => {
     const saved = localStorage.getItem("admin-merchants-view-mode") as HistoryViewMode;
@@ -48,6 +54,31 @@ export default function AdminMerchantsList({
   const handleViewChange = (mode: HistoryViewMode) => {
     setViewMode(mode);
     localStorage.setItem("admin-merchants-view-mode", mode);
+  };
+
+  const handleAutoSearch = async (id: number | "new", name: string) => {
+    setIsSearching(id);
+    try {
+      const result = await getMerchantMccSuggestions(name);
+      if (result) {
+        if (id === "new" || (editingMerchant && id === editingMerchant.id)) {
+          setModalMccOverride({
+            mainMcc: result.mainMcc,
+            additionalMccs: result.additionalMccs
+          });
+        } else {
+          setMccOverrides(prev => ({
+            ...prev,
+            [id as number]: {
+              mainMcc: result.mainMcc,
+              additionalMccs: result.additionalMccs
+            }
+          }));
+        }
+      }
+    } finally {
+      setIsSearching(null);
+    }
   };
 
   const getCategoryLabel = (id: number | null) => {
@@ -176,12 +207,27 @@ export default function AdminMerchantsList({
                         )}
                       </div>
                       <div className={stack({ gap: "4px", flex: 1, minW: 0 })}>
-                        <input
-                          name="name"
-                          defaultValue={merchant.name}
-                          required
-                          className={css({ fontWeight: "700", fontSize: "16px", color: "var(--foreground)", border: "none", bg: "transparent", borderBottom: "1px dashed", borderColor: "#e2e8f0", w: "full", _focus: { borderColor: "sberGreen", outline: "none" } })}
-                        />
+                        <div className={flex({ align: "center", gap: "8px" })}>
+                          <input
+                            name="name"
+                            id={`merchant-name-${merchant.id}`}
+                            defaultValue={merchant.name}
+                            required
+                            className={css({ fontWeight: "700", fontSize: "16px", color: "var(--foreground)", border: "none", bg: "transparent", borderBottom: "1px dashed", borderColor: "#e2e8f0", flex: 1, _focus: { borderColor: "sberGreen", outline: "none" } })}
+                          />
+                          <button 
+                            type="button"
+                            onClick={() => {
+                              const nameInput = document.getElementById(`merchant-name-${merchant.id}`) as HTMLInputElement;
+                              handleAutoSearch(merchant.id, nameInput?.value || merchant.name);
+                            }}
+                            disabled={isSearching === merchant.id}
+                            className={css({ p: "4px", color: "var(--secondary-text)", cursor: "pointer", _hover: { color: "sberGreen" }, disabled: { opacity: 0.5 } })}
+                            title="Автопоиск MCC"
+                          >
+                            {isSearching === merchant.id ? <Loader2 size={16} className={css({ animation: "spin 1s linear infinite" })} /> : <Search size={16} />}
+                          </button>
+                        </div>
                         <div className={grid({ columns: 2, gap: "8px", mt: "4px" })}>
                           <div className={stack({ gap: "2px" })}>
                             <label className={css({ fontSize: "9px", fontWeight: "800", color: "secondaryText" })}>MCC</label>
@@ -189,7 +235,8 @@ export default function AdminMerchantsList({
                               name="mainMcc"
                               options={mccOptions}
                               required
-                              defaultValue={merchant.mainMcc}
+                              key={`main-${merchant.id}-${mccOverrides[merchant.id]?.mainMcc}`}
+                              defaultValue={mccOverrides[merchant.id]?.mainMcc || merchant.mainMcc}
                             />
                           </div>
                           <div className={stack({ gap: "2px" })}>
@@ -236,7 +283,8 @@ export default function AdminMerchantsList({
                     <label className={css({ fontSize: "10px", fontWeight: "800", color: "secondaryText", textTransform: "uppercase" })}>Дополнительные MCC</label>
                     <input
                       name="additionalMccs"
-                      defaultValue={merchant.additionalMccs}
+                      key={`add-${merchant.id}-${mccOverrides[merchant.id]?.additionalMccs}`}
+                      defaultValue={mccOverrides[merchant.id]?.additionalMccs || merchant.additionalMccs}
                       className={css({ fontSize: "12px", color: "var(--foreground)", bg: "var(--input-bg)", px: "8px", py: "4px", borderRadius: "8px", border: "none", width: "full", _focus: { outline: "none", ring: "1px solid gray" } })}
                     />
                   </div>
@@ -276,7 +324,10 @@ export default function AdminMerchantsList({
         })}>
           <div className="sber-card" style={{ width: "100%", maxWidth: "500px", position: "relative", boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)" }}>
             <button
-              onClick={() => setEditingMerchant(null)}
+              onClick={() => {
+                setEditingMerchant(null);
+                setModalMccOverride(null);
+              }}
               className={css({ position: "absolute", top: "16px", right: "16px", border: "none", bg: "transparent", cursor: "pointer", color: "var(--secondary-text)", _hover: { color: "var(--foreground)" } })}
             >
               <X size={20} />
@@ -290,20 +341,35 @@ export default function AdminMerchantsList({
               action={async (formData) => {
                 await updateMerchant(editingMerchant.id, formData);
                 setEditingMerchant(null);
+                setModalMccOverride(null);
               }}
               successMessage="Данные мерчанта обновлены"
               className={stack({ gap: "20px" })}
             >
               <div className={stack({ gap: "6px" })}>
                 <label className="sber-label">НАЗВАНИЕ ТОРГОВОЙ ТОЧКИ</label>
-                <input
-                  name="name"
-                  type="text"
-                  required
-                  defaultValue={editingMerchant.name}
-                  placeholder="Например, Ozon"
-                  className="sber-input"
-                />
+                <div className={flex({ align: "center", gap: "10px" })}>
+                  <input
+                    name="name"
+                    id="modal-merchant-name"
+                    type="text"
+                    required
+                    defaultValue={editingMerchant.name}
+                    placeholder="Например, Ozon"
+                    className="sber-input"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const nameInput = document.getElementById("modal-merchant-name") as HTMLInputElement;
+                      handleAutoSearch(editingMerchant.id, nameInput?.value || editingMerchant.name);
+                    }}
+                    disabled={isSearching === editingMerchant.id}
+                    className={css({ p: "12px", bg: "var(--card-bg)", borderRadius: "14px", border: "1px solid var(--border-color)", color: "var(--secondary-text)", cursor: "pointer", _hover: { color: "sberGreen", borderColor: "sberGreen" }, disabled: { opacity: 0.5 } })}
+                  >
+                    {isSearching === editingMerchant.id ? <Loader2 size={18} className={css({ animation: "spin 1s linear infinite" })} /> : <Search size={18} />}
+                  </button>
+                </div>
               </div>
 
               <div className={stack({ gap: "6px" })}>
@@ -323,7 +389,8 @@ export default function AdminMerchantsList({
                   name="mainMcc"
                   options={mccOptions}
                   required
-                  defaultValue={editingMerchant.mainMcc}
+                  key={`modal-main-${editingMerchant.id}-${modalMccOverride?.mainMcc}`}
+                  defaultValue={modalMccOverride?.mainMcc || editingMerchant.mainMcc}
                 />
               </div>
 
@@ -341,7 +408,8 @@ export default function AdminMerchantsList({
                 <label className="sber-label">ДОПОЛНИТЕЛЬНЫЕ MCC (ПРОИЗВОЛЬНЫЙ ТЕКСТ)</label>
                 <textarea
                   name="additionalMccs"
-                  defaultValue={editingMerchant.additionalMccs}
+                  key={`modal-add-${editingMerchant.id}-${modalMccOverride?.additionalMccs}`}
+                  defaultValue={modalMccOverride?.additionalMccs || editingMerchant.additionalMccs}
                   placeholder="Введите MCC через запятую или пробел."
                   className="sber-input"
                   style={{ minHeight: "80px", paddingTop: "12px" }}

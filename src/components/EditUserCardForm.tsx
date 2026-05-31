@@ -2,10 +2,11 @@
 
 import { useTransition } from "react";
 import { css } from "../../styled-system/css";
-import { stack, flex } from "../../styled-system/patterns";
+import { stack, flex, grid } from "../../styled-system/patterns";
 import { CreditCard, Save } from "lucide-react";
 import { useToast } from "./Toast";
 import { useRouter } from "next/navigation";
+import CalculatorInput from "./CalculatorInput";
 
 interface EditUserCardFormProps {
   card: {
@@ -15,6 +16,8 @@ interface EditUserCardFormProps {
     initialBalance: number;
     accountType: string;
     creditLimit: number | null;
+    statementDay: number | null;
+    paymentDay: number | null;
   };
   updateUserCardAction: (formData: FormData) => Promise<void>;
 }
@@ -72,10 +75,8 @@ export default function EditUserCardForm({ card, updateUserCardAction }: EditUse
           </div>
           <div className={stack({ gap: "6px", flex: 1, minW: "140px" })}>
             <label className="sber-label">НАЧАЛЬНЫЙ БАЛАНС (₽)</label>
-            <input
+            <CalculatorInput
               name="initialBalance"
-              type="number"
-              step="0.01"
               defaultValue={card.initialBalance ?? 0}
               placeholder={card.accountType === "credit" ? "-5000.00" : "0.00"}
               className="sber-input"
@@ -107,18 +108,46 @@ export default function EditUserCardForm({ card, updateUserCardAction }: EditUse
           </div>
 
           {card.accountType === "credit" && (
-            <div className={stack({ gap: "6px", flex: "1 1 100%", minW: "140px" })}>
-              <label className="sber-label">КРЕДИТНЫЙ ЛИМИТ (₽)</label>
-              <input 
-                name="creditLimit" 
-                type="number" 
-                step="0.01" 
-                defaultValue={card.creditLimit || ""}
-                placeholder="50000.00" 
-                className="sber-input" 
-                style={{ fontWeight: "700" }}
-              />
-            </div>
+            <>
+              <div className={stack({ gap: "6px", flex: "1 1 100%", minW: "140px" })}>
+                <label className="sber-label">КРЕДИТНЫЙ ЛИМИТ (₽)</label>
+                <input 
+                  name="creditLimit" 
+                  type="number" 
+                  step="0.01" 
+                  defaultValue={card.creditLimit || ""}
+                  placeholder="50000.00" 
+                  className="sber-input" 
+                  style={{ fontWeight: "700" }}
+                />
+              </div>
+              <div className={grid({ columns: 2, gap: "12px", flex: "1 1 100%" })}>
+                <div className={stack({ gap: "6px" })}>
+                  <label className="sber-label">ДЕНЬ ВЫПИСКИ</label>
+                  <input 
+                    name="statementDay" 
+                    type="number" 
+                    min={1} 
+                    max={31} 
+                    defaultValue={card.statementDay || ""}
+                    placeholder="1" 
+                    className="sber-input" 
+                  />
+                </div>
+                <div className={stack({ gap: "6px" })}>
+                  <label className="sber-label">ДЕНЬ ПЛАТЕЖА</label>
+                  <input 
+                    name="paymentDay" 
+                    type="number" 
+                    min={1} 
+                    max={31} 
+                    defaultValue={card.paymentDay || ""}
+                    placeholder="25" 
+                    className="sber-input" 
+                  />
+                </div>
+              </div>
+            </>
           )}
         </div>
         <button type="submit" className="sber-button" disabled={isPending} style={{ backgroundColor: "var(--secondary-text)" }}>

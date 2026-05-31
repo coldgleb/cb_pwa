@@ -1,12 +1,13 @@
 import { db } from "@/db";
-import { banks, loyaltyPrograms, bankCategories, bankCategoryMcc, merchants, bankCategoryMerchant, mccCodes } from "@/db/schema";
+import { banks, loyaltyPrograms, bankCategories, bankCategoryMcc, merchants, bankCategoryMerchant, mccCodes, loyaltyProgramSettings } from "@/db/schema";
 import { updateLoyaltyProgram, deleteLoyaltyProgram } from "@/lib/actions/loyalty-programs";
+import { addLoyaltyProgramSetting, deleteLoyaltyProgramSetting } from "@/lib/actions/loyalty-program-settings";
 import { createBankCategory, updateBankCategory, duplicateBankCategory } from "@/lib/actions/categories";
 import { css } from "../../../../../../styled-system/css";
 import { stack, flex, wrap, grid } from "../../../../../../styled-system/patterns";
 import { eq, inArray, desc, asc, and, isNull } from "drizzle-orm";
 import { notFound, redirect } from "next/navigation";
-import { ArrowLeft, ShieldCheck, Ban, Plus, Save, Trash2, Tag, Copy, Settings, Store, Award } from "lucide-react";
+import { ArrowLeft, ShieldCheck, Ban, Plus, Save, Trash2, Tag, Copy, Settings, Store, Award, History as HistoryIcon } from "lucide-react";
 import TiersEditor from "@/components/admin/TiersEditor";
 import MultiSearchableSelect from "@/components/MultiSearchableSelect";
 import SearchableSelect from "@/components/SearchableSelect";
@@ -36,7 +37,14 @@ export default async function EditLoyaltyProgramPage({ params }: { params: Promi
 
   const updateProgramWithId = updateLoyaltyProgram.bind(null, programId);
 
+  const historicalSettings = await db
+    .select()
+    .from(loyaltyProgramSettings)
+    .where(eq(loyaltyProgramSettings.loyaltyProgramId, programId))
+    .orderBy(desc(loyaltyProgramSettings.startDate));
+
   const today = new Date().toISOString().split('T')[0];
+  const effectiveSetting = historicalSettings.find(s => s.startDate <= today) || { roundingType: program.roundingType };
 
   const rawCategories = await db.select({
     id: bankCategories.id,
@@ -113,14 +121,14 @@ export default async function EditLoyaltyProgramPage({ params }: { params: Promi
         </header>
 
         {/* Top Control Grid */}
-        <div className={grid({ columns: { base: 1, lg: 2 }, gap: "20px", alignItems: "start" })}>
+        <div className={grid({ columns: { base: 1, lg: 3 }, gap: "20px", alignItems: "start" })}>
 
           {/* Column 1: Edit Program */}
           <section className={stack({ gap: "16px" })}>
             <div className={flex({ justify: "space-between", align: "center", gap: "12px" })}>
               <div className={flex({ align: "center", gap: "12px" })}>
                 <div className={css({ p: "8px", bg: "var(--sber-green)", borderRadius: "10px", color: "white" })}><Settings size={20} /></div>
-                <h2 className={css({ fontSize: "20px", fontWeight: "800", color: "var(--foreground)" })}>Настройки программы</h2>
+                <h2 className={css({ fontSize: "20px", fontWeight: "800", color: "var(--foreground)" })}>Настройки</h2>
               </div>
             </div>
             
@@ -155,6 +163,14 @@ export default async function EditLoyaltyProgramPage({ params }: { params: Promi
                     style={{ minHeight: "80px", paddingTop: "8px" }}
                   />
                 </div>
+                <div className={stack({ gap: "8px" })}>
+                  <label className="sber-label">ОКРУГЛЕНИЕ ПО УМОЛЧАНИЮ</label>
+                  <SearchableSelect 
+                    name="roundingType" 
+                    defaultValue={program.roundingType}
+                    options={roundingOptions}
+                  />
+                </div>
                 <button type="submit" className="sber-button">
                   Обновить настройки
                 </button>
@@ -166,7 +182,64 @@ export default async function EditLoyaltyProgramPage({ params }: { params: Promi
             </div>
           </section>
 
-          {/* Column 2: New Category */}
+          {/* Column 2: Rounding History */}
+          <section className={stack({ gap: "16px" })}>
+            <div className={flex({ align: "center", gap: "12px" })}>
+              <div className={css({ p: "8px", bg: "#6366f1", borderRadius: "10px", color: "white" })}><HistoryIcon size={20} /></div>
+              <h2 className={css({ fontSize: "20px", fontWeight: "800", color: "var(--foreground)" })}>История округления</h2>
+            </div>
+            
+            <div className={css({ p: "16px", bg: "var(--sber-green)", color: "white", borderRadius: "16px", shadow: "sm", fontWeight: "700", fontSize: "15px" })}>
+              Активно: {roundingOptions.find(o => o.value === effectiveSetting.roundingType)?.label}
+            </div>
+
+            <div className="sber-card" style={{ padding: '20px' }}>
+              <h3 className={css({ fontSize: "14px", fontWeight: "800", mb: "16px", color: "var(--secondary-text)", textTransform: "uppercase" })}>Добавить правило</h3>
+              <form action={addLoyaltyProgramSetting} className={stack({ gap: "24px" })}>
+                <input type="hidden" name="loyaltyProgramId" value={programId} />
+                <div className={stack({ gap: "16px" })}>
+                  <div className={stack({ gap: "8px" })}>
+                    <label className="sber-label">ТИП ОКРУГЛЕНИЯ</label>
+                    <SearchableSelect name="roundingType" required options={roundingOptions} />
+                  </div>
+                  <div className={stack({ gap: "8px" })}>
+                    <label className="sber-label">ДЕЙСТВУЕТ С ДАТЫ</label>
+                    <DatePicker name="startDate" required />
+                  </div>
+                </div>
+                <button type="submit" className="sber-button" style={{ backgroundColor: "#6366f1" }}>
+                  Сохранить правило
+                </button>
+              </form>
+            </div>
+
+            {historicalSettings.length > 0 && (
+              <div className="sber-card" style={{ padding: '20px' }}>
+                <h3 className={css({ fontSize: "14px", fontWeight: "800", mb: "16px", color: "var(--secondary-text)", textTransform: "uppercase" })}>История</h3>
+                <div className={stack({ gap: "12px" })}>
+                  {historicalSettings.map(s => (
+                    <div key={s.id} className={flex({ justify: "space-between", align: "center", gap: "8px", pb: "12px", borderBottom: "1px dashed var(--border-color)", _last: { borderBottom: "none", pb: 0 } })}>
+                      <div className={stack({ gap: "2px" })}>
+                        <p className={css({ fontWeight: "700", fontSize: "14px", color: "var(--foreground)" })}>
+                          {roundingOptions.find(o => o.value === s.roundingType)?.label}
+                        </p>
+                        <p className={css({ fontSize: "11px", color: "var(--secondary-text)" })}>
+                          С {s.startDate.split('-').reverse().join('.')}
+                        </p>
+                      </div>
+                      <form action={deleteLoyaltyProgramSetting.bind(null, s.id, programId)}>
+                        <button type="submit" className={css({ p: "6px", color: "#ef4444", cursor: "pointer", _hover: { bg: "rgba(239, 68, 68, 0.1)", borderRadius: "8px" } })}>
+                          <Trash2 size={14} className={css({ width: "14px", height: "14px" })} />
+                        </button>
+                      </form>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </section>
+
+          {/* Column 3: New Category */}
           <section className={stack({ gap: "16px" })}>
             <div className={flex({ align: "center", gap: "12px" })}>
               <div className={css({ p: "8px", bg: "#eab308", borderRadius: "10px", color: "white" })}><Plus size={20} /></div>

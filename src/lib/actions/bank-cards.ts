@@ -15,7 +15,6 @@ export async function createBankCard(formData: FormData) {
 
   const name = formData.get("name") as string;
   const bankId = parseInt(formData.get("bankId") as string);
-  const roundingType = formData.get("roundingType") as string || "no_rounding";
   const defaultCashbackLimit = parseFloat(formData.get("defaultCashbackLimit") as string) || null;
   const loyaltyProgramIdVal = formData.get("loyaltyProgramId") as string;
   const loyaltyProgramId = loyaltyProgramIdVal ? parseInt(loyaltyProgramIdVal) : null;
@@ -26,7 +25,6 @@ export async function createBankCard(formData: FormData) {
   await db.insert(bankCards).values({
     name,
     bankId,
-    roundingType,
     defaultCashbackLimit,
     loyaltyProgramId: loyaltyProgramId && !isNaN(loyaltyProgramId) ? loyaltyProgramId : null,
     accountType,
@@ -41,7 +39,6 @@ export async function updateBankCard(id: number, formData: FormData) {
 
   const name = formData.get("name") as string;
   const bankId = parseInt(formData.get("bankId") as string);
-  const roundingType = formData.get("roundingType") as string || "no_rounding";
   const defaultCashbackLimit = parseFloat(formData.get("defaultCashbackLimit") as string) || null;
   const loyaltyProgramIdVal = formData.get("loyaltyProgramId") as string;
   const loyaltyProgramId = loyaltyProgramIdVal ? parseInt(loyaltyProgramIdVal) : null;
@@ -53,7 +50,6 @@ export async function updateBankCard(id: number, formData: FormData) {
     .set({ 
       name, 
       bankId, 
-      roundingType, 
       defaultCashbackLimit, 
       loyaltyProgramId: loyaltyProgramId && !isNaN(loyaltyProgramId) ? loyaltyProgramId : null,
       accountType,

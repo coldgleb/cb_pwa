@@ -7,7 +7,7 @@ import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 import { recalculateTransactionsForBankCard } from "./transactions";
 
-async function recalculateTransactionsForLoyaltyProgram(loyaltyProgramId: number) {
+export async function recalculateTransactionsForLoyaltyProgram(loyaltyProgramId: number) {
   const cards = await db
     .select({ id: bankCards.id })
     .from(bankCards)
@@ -24,6 +24,7 @@ export async function createLoyaltyProgram(formData: FormData) {
   const name = formData.get("name") as string;
   const bankId = parseInt(formData.get("bankId") as string);
   const description = formData.get("description") as string || null;
+  const roundingType = formData.get("roundingType") as string || "no_rounding";
 
   if (!name || isNaN(bankId)) throw new Error("Invalid data");
 
@@ -31,6 +32,7 @@ export async function createLoyaltyProgram(formData: FormData) {
     name,
     bankId,
     description,
+    roundingType,
   }).returning();
 
   if (newProgram) {
@@ -63,11 +65,12 @@ export async function updateLoyaltyProgram(id: number, formData: FormData) {
   const name = formData.get("name") as string;
   const bankId = parseInt(formData.get("bankId") as string);
   const description = formData.get("description") as string || null;
+  const roundingType = formData.get("roundingType") as string || "no_rounding";
 
   if (!name || isNaN(bankId)) throw new Error("Invalid data");
 
   await db.update(loyaltyPrograms)
-    .set({ name, bankId, description })
+    .set({ name, bankId, description, roundingType })
     .where(eq(loyaltyPrograms.id, id));
 
   // Trigger recalculation for all cards using this loyalty program

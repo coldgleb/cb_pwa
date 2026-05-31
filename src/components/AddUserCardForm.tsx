@@ -2,9 +2,10 @@
 
 import { useState, useMemo, useTransition } from "react";
 import { css } from "../../styled-system/css";
-import { stack } from "../../styled-system/patterns";
+import { stack, grid } from "../../styled-system/patterns";
 
 import SearchableSelect from "./SearchableSelect";
+import CalculatorInput from "./CalculatorInput";
 import { addUserCard } from "@/lib/actions/user-cards";
 import { useToast } from "./Toast";
 import { useRouter } from "next/navigation";
@@ -99,17 +100,44 @@ export default function AddUserCardForm({ banks, cardTypes }: AddUserCardFormPro
       </div>
 
       {isCredit && (
-        <div className={stack({ gap: "6px" })}>
-          <label className="sber-label">КРЕДИТНЫЙ ЛИМИТ (₽)</label>
-          <input 
-            name="creditLimit" 
-            type="number" 
-            step="0.01" 
-            placeholder="50000.00" 
-            className="sber-input" 
-            style={{ fontWeight: "700" }}
-          />
-        </div>
+        <>
+          <div className={stack({ gap: "6px" })}>
+            <label className="sber-label">КРЕДИТНЫЙ ЛИМИТ (₽)</label>
+            <input 
+              name="creditLimit" 
+              type="number" 
+              step="0.01" 
+              placeholder="50000.00" 
+              className="sber-input" 
+              style={{ fontWeight: "700" }}
+            />
+          </div>
+
+          <div className={grid({ columns: 2, gap: "12px" })}>
+            <div className={stack({ gap: "6px" })}>
+              <label className="sber-label">ДЕНЬ ВЫПИСКИ</label>
+              <input 
+                name="statementDay" 
+                type="number" 
+                min={1} 
+                max={31} 
+                placeholder="1" 
+                className="sber-input" 
+              />
+            </div>
+            <div className={stack({ gap: "6px" })}>
+              <label className="sber-label">ДЕНЬ ПЛАТЕЖА</label>
+              <input 
+                name="paymentDay" 
+                type="number" 
+                min={1} 
+                max={31} 
+                placeholder="25" 
+                className="sber-input" 
+              />
+            </div>
+          </div>
+        </>
       )}
 
       <div className={stack({ gap: "6px" })}>
@@ -125,10 +153,8 @@ export default function AddUserCardForm({ banks, cardTypes }: AddUserCardFormPro
 
       <div className={stack({ gap: "6px" })}>
         <label className="sber-label">НАЧАЛЬНЫЙ БАЛАНС (₽)</label>
-        <input 
+        <CalculatorInput 
           name="initialBalance" 
-          type="number" 
-          step="0.01" 
           placeholder={isCredit ? "-5000.00" : "0.00"} 
           className="sber-input" 
           style={{ fontWeight: "700" }}

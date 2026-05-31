@@ -1,13 +1,13 @@
 "use client";
 
 import { Trash2 } from "lucide-react";
-import { css } from "../../../styled-system/css";
-import { flex } from "../../../styled-system/patterns";
-import { deleteBank } from "@/lib/actions/banks";
-import { useToast } from "../Toast";
+import { css } from "../../styled-system/css";
+import { flex } from "../../styled-system/patterns";
+import { deleteUserCard } from "@/lib/actions/user-cards";
+import { useToast } from "./Toast";
 import { useRouter } from "next/navigation";
 
-export default function DeleteBankButton({ bankId }: { bankId: number }) {
+export default function DeleteUserCardButton({ cardId }: { cardId: number }) {
   const { toast } = useToast();
   const router = useRouter();
 
@@ -15,15 +15,15 @@ export default function DeleteBankButton({ bankId }: { bankId: number }) {
     <form 
       action={async () => {
         try {
-          await deleteBank(bankId);
-          toast("Банк удален");
-          router.push("/admin/banks");
+          await deleteUserCard(cardId);
+          toast("Карта удалена");
+          router.push("/cards");
         } catch (error) {
           toast("Ошибка при удалении", "error");
         }
       }}
       onSubmit={(e) => {
-        if (!confirm("Вы уверены, что хотите удалить этот банк? Это может привести к ошибкам, если к банку привязаны карты.")) {
+        if (!confirm("Вы уверены, что хотите удалить эту карту? Все связанные транзакции также будут удалены.")) {
           e.preventDefault();
         }
       }}

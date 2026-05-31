@@ -30,6 +30,16 @@ export default async function LoyaltyProgramsPage() {
       label: bank.name
     }));
 
+    const roundingOptions = [
+      { value: "no_rounding", label: "Без округлений" },
+      { value: "amount_100_down", label: "Сумма до 100р вниз" },
+      { value: "cashback_0_01_down", label: "Кешбэк до 0.01 вниз" },
+      { value: "cashback_0_01_math", label: "Кешбэк до 0.01 по матем. правилам" },
+      { value: "cashback_1_down", label: "Кешбэк до 1р вниз" },
+      { value: "cashback_1_math", label: "Кешбэк до 1р по матем. правилам" },
+      { value: "halva", label: "Халва (до 1р — 0.01, от 1р — 1р)" },
+    ];
+
     return (
       <div className={stack({ gap: "32px" })}>
         <h1 className={css({ fontSize: "24px", fontWeight: "800", color: "var(--foreground)" })}>Программы лояльности</h1>
@@ -70,6 +80,14 @@ export default async function LoyaltyProgramsPage() {
                 placeholder="Краткое описание условий..."
                 className="sber-input"
                 style={{ minHeight: "80px", paddingTop: "8px" }}
+              />
+            </div>
+            <div className={stack({ gap: "6px" })}>
+              <label className="sber-label">ОКРУГЛЕНИЕ ПО УМОЛЧАНИЮ</label>
+              <SearchableSelect 
+                name="roundingType" 
+                options={roundingOptions}
+                defaultValue="no_rounding"
               />
             </div>
             <button type="submit" className="sber-button">

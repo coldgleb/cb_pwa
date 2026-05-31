@@ -41,25 +41,6 @@ export default async function EditBankCardPage({ params }: { params: Promise<{ i
 
   const updateCardWithId = updateBankCard.bind(null, cardId);
 
-  const historicalSettings = await db
-    .select()
-    .from(bankCardSettings)
-    .where(eq(bankCardSettings.bankCardId, cardId))
-    .orderBy(desc(bankCardSettings.startDate));
-
-  const today = new Date().toISOString().split('T')[0];
-  const effectiveSetting = historicalSettings.find(s => s.startDate <= today) || { roundingType: card.roundingType };
-
-  const roundingOptions = [
-    { value: "no_rounding", label: "Без округлений" },
-    { value: "amount_100_down", label: "Сумма до 100р вниз" },
-    { value: "cashback_0_01_down", label: "Кешбэк до 0.01 вниз" },
-    { value: "cashback_0_01_math", label: "Кешбэк до 0.01 по матем. правилам" },
-    { value: "cashback_1_down", label: "Кешбэк до 1р вниз" },
-    { value: "cashback_1_math", label: "Кешбэк до 1р по матем. правилам" },
-    { value: "halva", label: "Халва (до 1р — 0.01, от 1р — 1р)" },
-  ];
-
   return (
     <div className="sber-container-admin">
       <div className={stack({ gap: "32px" })}>
@@ -116,7 +97,7 @@ export default async function EditBankCardPage({ params }: { params: Promise<{ i
 
                 {card.loyaltyProgramId && (
                   <a href={`/admin/loyalty-programs/${card.loyaltyProgramId}`} className={flex({ align: "center", gap: "8px", fontSize: "14px", fontWeight: "700", color: "var(--sber-green)", mt: "-8px" })}>
-                    <Award size={16} /> Настроить категории этой программы
+                    <Award size={16} /> Настроить категории и округление программы
                   </a>
                 )}
 
@@ -137,15 +118,6 @@ export default async function EditBankCardPage({ params }: { params: Promise<{ i
                 </div>
 
                 <div className={stack({ gap: "8px" })}>
-                  <label className="sber-label">ОКРУГЛЕНИЕ ПО УМОЛЧАНИЮ</label>
-                  <SearchableSelect 
-                    name="roundingType" 
-                    defaultValue={card.roundingType}
-                    options={roundingOptions}
-                    required
-                  />
-                </div>
-                <div className={stack({ gap: "8px" })}>
                   <label className="sber-label">ЛИМИТ КЕШБЭКА В МЕСЯЦ</label>
                   <input
                     name="defaultCashbackLimit"
@@ -161,64 +133,6 @@ export default async function EditBankCardPage({ params }: { params: Promise<{ i
               </form>
             </div>
           </section>
-
-          {/* Column 2: Rounding Rules */}
-          <section className={stack({ gap: "16px" })}>
-            <div className={flex({ align: "center", gap: "12px" })}>
-              <div className={css({ p: "8px", bg: "#6366f1", borderRadius: "10px", color: "white" })}><HistoryIcon size={20} /></div>
-              <h2 className={css({ fontSize: "20px", fontWeight: "800", color: "var(--foreground)" })}>Округление</h2>
-            </div>
-            
-            <div className={css({ p: "16px", bg: "var(--sber-green)", color: "white", borderRadius: "16px", shadow: "sm", fontWeight: "700", fontSize: "15px" })}>
-              Активно: {roundingOptions.find(o => o.value === effectiveSetting.roundingType)?.label}
-            </div>
-
-            <div className="sber-card" style={{ padding: '20px' }}>
-              <h3 className={css({ fontSize: "14px", fontWeight: "800", mb: "16px", color: "var(--secondary-text)", textTransform: "uppercase" })}>Добавить правило</h3>
-              <form action={addBankCardSetting} className={stack({ gap: "24px" })}>
-                <input type="hidden" name="bankCardId" value={cardId} />
-                <div className={stack({ gap: "16px" })}>
-                  <div className={stack({ gap: "8px" })}>
-                    <label className="sber-label">ТИП ОКРУГЛЕНИЯ</label>
-                    <SearchableSelect name="roundingType" required options={roundingOptions} />
-                  </div>
-                  <div className={stack({ gap: "8px" })}>
-                    <label className="sber-label">ДЕЙСТВУЕТ С ДАТЫ</label>
-                    <DatePicker name="startDate" required />
-                  </div>
-                </div>
-                <button type="submit" className="sber-button" style={{ backgroundColor: "#6366f1" }}>
-                  Сохранить правило
-                </button>
-              </form>
-            </div>
-
-            {historicalSettings.length > 0 && (
-              <div className="sber-card" style={{ padding: '20px' }}>
-                <h3 className={css({ fontSize: "14px", fontWeight: "800", mb: "16px", color: "var(--secondary-text)", textTransform: "uppercase" })}>История</h3>
-                <div className={stack({ gap: "12px" })}>
-                  {historicalSettings.map(s => (
-                    <div key={s.id} className={flex({ justify: "space-between", align: "center", gap: "8px", pb: "12px", borderBottom: "1px dashed var(--border-color)", _last: { borderBottom: "none", pb: 0 } })}>
-                      <div className={stack({ gap: "2px" })}>
-                        <p className={css({ fontWeight: "700", fontSize: "14px", color: "var(--foreground)" })}>
-                          {roundingOptions.find(o => o.value === s.roundingType)?.label}
-                        </p>
-                        <p className={css({ fontSize: "11px", color: "var(--secondary-text)" })}>
-                          С {s.startDate.split('-').reverse().join('.')}
-                        </p>
-                      </div>
-                      <form action={deleteBankCardSetting.bind(null, s.id, cardId)}>
-                        <button type="submit" className={css({ p: "6px", color: "#ef4444", cursor: "pointer", _hover: { bg: "rgba(239, 68, 68, 0.1)", borderRadius: "8px" } })}>
-                          <Trash2 size={14} className={css({ width: "14px", height: "14px" })} />
-                        </button>
-                      </form>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </section>
-
         </div>
       </div>
     </div>

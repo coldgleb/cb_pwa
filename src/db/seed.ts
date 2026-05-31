@@ -13,7 +13,14 @@ async function main() {
     email: "saygingleb101@gmail.com",
     password: hashedPassword,
     role: "admin",
-  }).onConflictDoNothing();
+  }).onConflictDoUpdate({
+    target: users.email,
+    set: {
+      password: hashedPassword,
+      role: "admin",
+      name: "Admin"
+    }
+  });
 
   const popularBanks = [
     { name: "Т-Банк (Тинькофф)", logo: "https://acdn.tinkoff.ru/static/documents/09695663-0a7c-47b7-872e-36067b57b3f9.png", website: "tbank.ru" },
